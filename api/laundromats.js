@@ -55,6 +55,7 @@ export default createHandler(async function handler(req, res) {
       .from('laundromats')
       .select('*')
       .eq('verification_status', 'approved')
+      .order('is_featured', { ascending: false })
       .order('rating_average', { ascending: false })
       .range(offset, offset + limit - 1);
     if (q.q) request = request.or(`name.ilike.%${q.q}%,address.ilike.%${q.q}%,description.ilike.%${q.q}%`);

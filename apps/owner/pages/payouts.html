@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Owner Settings - LaundroMaster</title>
+  <title>Owner Payouts - LaundroMaster</title>
   <link rel="stylesheet" href="../../../shared/css/tokens.css?v=4">
   <link rel="stylesheet" href="../../../shared/css/reset.css?v=4">
   <link rel="stylesheet" href="../../../shared/css/layout.css?v=4">
@@ -30,40 +30,35 @@
   </aside>
   <main class="main">
     <header class="topbar page-shell flex justify-between">
-      <h1>Settings</h1>
+      <h1>Payouts</h1>
       <div id="sessionMount" class="session-control"></div>
     </header>
     <div class="page-shell content">
-      <div class="layout-split grid">
-        <form class="card" id="profileForm">
-          <div class="card-body">
-            <h2 class="card-title">Business profile</h2>
-            <div class="field">
-              <label class="label" for="full_name">Contact name</label>
-              <input class="input" id="full_name" name="full_name">
-            </div>
-            <div class="field">
-              <label class="label" for="email">Email</label>
-              <input class="input" id="email" disabled>
-            </div>
-            <div class="field">
-              <label class="label" for="phone">Phone</label>
-              <input class="input" id="phone" name="phone">
-            </div>
-            <button class="btn btn-primary" type="submit" id="saveBtn">Save changes</button>
-            <p class="form-msg" id="msg" role="status" aria-live="polite"></p>
-          </div>
-        </form>
-        <aside class="card">
-          <div class="card-body">
-            <h2 class="card-title">Your laundromats</h2>
-            <div id="bizList"></div>
-          </div>
-        </aside>
+      <div class="card-grid" style="margin-bottom:var(--space-6)">
+        <article class="card"><div class="card-body"><h2 class="text-sm text-muted">Available</h2><p class="stat-value" id="available">—</p></div></article>
+        <article class="card"><div class="card-body"><h2 class="text-sm text-muted">Total earned</h2><p class="stat-value" id="earned">—</p></div></article>
+        <article class="card"><div class="card-body"><h2 class="text-sm text-muted">Paid out</h2><p class="stat-value" id="paidOut">—</p></div></article>
       </div>
+      <form class="card" id="payoutForm" style="max-width:520px; margin-bottom:var(--space-6)">
+        <div class="card-body">
+          <h2 class="card-title">Request a payout</h2>
+          <p class="text-sm text-muted" id="minNote">—</p>
+          <div class="field">
+            <label class="label" for="amount">Amount</label>
+            <input class="input" id="amount" type="number" step="0.01" min="0">
+          </div>
+          <div class="field">
+            <label class="label" for="method">Payout method / details</label>
+            <input class="input" id="method" placeholder="Bank transfer / account details">
+          </div>
+          <button class="btn btn-primary" type="submit" id="reqBtn">Request payout</button>
+        </div>
+      </form>
+      <div class="section-head"><h2>History</h2></div>
+      <div id="list"></div>
     </div>
   </main>
   <script src="../js/config.js?v=4"></script>
-  <script type="module" src="../js/settings.js?v=4"></script>
+  <script type="module" src="../js/payouts.js?v=4"></script>
 </body>
 </html>

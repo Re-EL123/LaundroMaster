@@ -8,12 +8,16 @@ import { mountDashboard } from '../../../shared/js/shell.js';
   if (!user) return;
 
   const totalEl = document.getElementById('total');
+  const availableEl = document.getElementById('available');
+  const paidOutEl = document.getElementById('paidOut');
   const txnsEl = document.getElementById('txns');
 
   skeleton(txnsEl, 3, 90);
   try {
     const { data } = await api.get('/owner?action=earnings');
     totalEl.textContent = currency(data.total);
+    if (availableEl) availableEl.textContent = currency(data.available);
+    if (paidOutEl) paidOutEl.textContent = currency(data.paidOut);
     const txns = data.transactions || [];
     if (!txns.length) return emptyState(txnsEl, 'No transactions yet.');
     txnsEl.innerHTML = txns.map((t) => `<article class="card" style="margin-bottom:var(--space-3)">

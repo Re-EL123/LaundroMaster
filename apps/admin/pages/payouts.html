@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Owner Bookings - LaundroMaster</title>
+  <title>Admin Payouts - LaundroMaster</title>
   <link rel="stylesheet" href="../../../shared/css/tokens.css?v=4">
   <link rel="stylesheet" href="../../../shared/css/reset.css?v=4">
   <link rel="stylesheet" href="../../../shared/css/layout.css?v=4">
@@ -12,47 +12,35 @@
   <link rel="stylesheet" href="../../../shared/css/forms.css?v=4">
   <link rel="stylesheet" href="../../../shared/css/utilities.css?v=4">
   <link rel="stylesheet" href="../../../shared/css/motion.css?v=4">
-  <link rel="stylesheet" href="../css/owner.css?v=4">
+  <link rel="stylesheet" href="../css/admin.css?v=4">
 </head>
-<body>
+<body data-admin-page="payouts">
   <aside class="sidebar">
-    <a class="brand" href="../index.html">LM Owner</a>
+    <a class="brand" href="../index.html">LM Admin</a>
     <nav class="side-nav">
       <a href="../index.html">Dashboard</a>
-      <a href="bookings.html">Bookings</a>
-      <a href="services.html">Services</a>
-      <a href="earnings.html">Earnings</a>
+      <a href="laundromats.html">Laundromats</a>
+      <a href="verifications.html">Verifications</a>
+      <a href="users.html">Users</a>
+      <a href="plans.html">Plans</a>
+      <a href="commissions.html">Commissions</a>
       <a href="payouts.html">Payouts</a>
-      <a href="plan.html">Plan</a>
       <a href="promotions.html">Promotions</a>
+      <a href="refunds.html">Refunds</a>
       <a href="settings.html">Settings</a>
+      <a href="audit.html">Audit</a>
     </nav>
   </aside>
   <main class="main">
     <header class="topbar page-shell flex justify-between">
-      <h1>Bookings</h1>
+      <h1>Payouts</h1>
       <div id="sessionMount" class="session-control"></div>
     </header>
     <div class="page-shell content">
-      <div class="toolbar">
-        <div class="field">
-          <label class="label" for="statusFilter">Filter by status</label>
-          <select class="select" id="statusFilter">
-            <option value="">All</option>
-            <option value="pending_acceptance">Awaiting acceptance</option>
-            <option value="accepted">Accepted</option>
-            <option value="washing">Washing</option>
-            <option value="ready">Ready</option>
-            <option value="out_for_delivery">Out for delivery</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </div>
-      </div>
       <div class="card-grid" id="list"></div>
     </div>
   </main>
   <script src="../js/config.js?v=4"></script>
-  <script type="module" src="../js/bookings.js?v=4"></script>
+  <script type="module" src="../js/payouts.js?v=4"></script>
 </body>
 </html>

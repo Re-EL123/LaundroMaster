@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Owner Bookings - LaundroMaster</title>
+  <title>Owner Promotions - LaundroMaster</title>
   <link rel="stylesheet" href="../../../shared/css/tokens.css?v=4">
   <link rel="stylesheet" href="../../../shared/css/reset.css?v=4">
   <link rel="stylesheet" href="../../../shared/css/layout.css?v=4">
@@ -30,29 +30,26 @@
   </aside>
   <main class="main">
     <header class="topbar page-shell flex justify-between">
-      <h1>Bookings</h1>
+      <h1>Promotions</h1>
       <div id="sessionMount" class="session-control"></div>
     </header>
     <div class="page-shell content">
-      <div class="toolbar">
-        <div class="field">
-          <label class="label" for="statusFilter">Filter by status</label>
-          <select class="select" id="statusFilter">
-            <option value="">All</option>
-            <option value="pending_acceptance">Awaiting acceptance</option>
-            <option value="accepted">Accepted</option>
-            <option value="washing">Washing</option>
-            <option value="ready">Ready</option>
-            <option value="out_for_delivery">Out for delivery</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
+      <form class="card" id="promoForm" style="max-width:520px; margin-bottom:var(--space-6)">
+        <div class="card-body">
+          <h2 class="card-title">Feature a laundromat</h2>
+          <p class="text-sm text-muted" id="priceNote">—</p>
+          <div class="field">
+            <label class="label" for="laundromat_id">Laundromat</label>
+            <select class="input" id="laundromat_id" required></select>
+          </div>
+          <button class="btn btn-primary" type="submit" id="buyBtn">Purchase promotion</button>
         </div>
-      </div>
+      </form>
+      <div class="section-head"><h2>Your promotions</h2></div>
       <div class="card-grid" id="list"></div>
     </div>
   </main>
   <script src="../js/config.js?v=4"></script>
-  <script type="module" src="../js/bookings.js?v=4"></script>
+  <script type="module" src="../js/promotions.js?v=4"></script>
 </body>
 </html>

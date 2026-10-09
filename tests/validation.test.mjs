@@ -8,6 +8,15 @@ import {
   reviewCreate,
   profileUpdate,
   verifyLaundromat,
+  subscribePlan,
+  cancelSubscription,
+  promotionCreate,
+  payoutRequest,
+  adminSettingsUpdate,
+  planUpsert,
+  adminUserUpdate,
+  adminPayoutUpdate,
+  adminNotification,
 } from '../api/_lib/validation.js';
 
 const uuid = '11111111-1111-1111-1111-111111111111';
@@ -66,3 +75,47 @@ test('verifyLaundromat constrains status', () => {
   assert.equal(verifyLaundromat.safeParse({ laundromat_id: uuid, status: 'approved' }).success, true);
   assert.equal(verifyLaundromat.safeParse({ laundromat_id: uuid, status: 'whatever' }).success, false);
 });
+
+test('subscribePlan and cancelSubscription validate input', () => {
+  assert.equal(subscribePlan.safeParse({ plan_id: uuid }).success, true);
+  assert.equal(subscribePlan.safeParse({ plan_id: 'nope' }).success, false);
+  assert.equal(cancelSubscription.safeParse({ audience: 'owner' }).success, true);
+  assert.equal(cancelSubscription.safeParse({ audience: 'admin' }).success, false);
+});
+
+test('promotionCreate validates laundromat and days', () => {
+  assert.equal(promotionCreate.safeParse({ laundromat_id: uuid }).success, true);
+  assert.equal(promotionCreate.safeParse({ laundromat_id: uuid, days: 30 }).success, true);
+  assert.equal(promotionCreate.safeParse({ laundromat_id: uuid, days: 0 }).success, false);
+});
+
+test('payoutRequest is optional-amount tolerant', () => {
+  assert.equal(payoutRequest.safeParse({}).success, true);
+  assert.equal(payoutRequest.safeParse({ amount: 100 }).success, true);
+  assert.equal(payoutRequest.safeParse({ amount: -5 }).success, false);
+});
+
+test('adminSettingsUpdate requires an object', () => {
+  assert.equal(adminSettingsUpdate.safeParse({ settings: { commission_percent: 9 } }).success, true);
+  assert.equal(adminSettingsUpdate.safeParse({}).success, false);
+});
+
+test('planUpsert enforces audience and commission range', () => {
+  const base = { code: 'owner_x', name: 'Pro X', audience: 'owner', price_monthly: 10, commission_percent: 5 };
+  assert.equal(planUpsert.safeParse(base).success, true);
+  assert.equal(planUpsert.safeParse({ ...base, audience: 'nobody' }).success, false);
+  assert.equal(planUpsert.safeParse({ ...base, commission_percent: 150 }).success, false);
+});
+
+test('adminUserUpdate constrains roles', () => {
+  assert.equal(adminUserUpdate.safeParse({ user_id: uuid, roles: ['admin'] }).success, true);
+  assert.equal(adminUserUpdate.safeParse({ user_id: uuid, roles: ['root'] }).success, false);
+});
+
+test('adminPayoutUpdate and adminNotification validate enums', () => {
+  assert.equal(adminPayoutUpdate.safeParse({ payout_id: uuid, status: 'paid' }).success, true);
+  assert.equal(adminPayoutUpdate.safeParse({ payout_id: uuid, status: 'done' }).success, false);
+  assert.equal(adminNotification.safeParse({ title: 'Hello' }).success, true);
+  assert.equal(adminNotification.safeParse({ title: 'H' }).success, false);
+});
+

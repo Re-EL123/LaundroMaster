@@ -3,7 +3,17 @@ import { successEnvelope, errorEnvelope, ApiError } from './_lib/errors.js';
 import { adminClient } from './_lib/supabase-admin.js';
 import { query, body } from './_lib/req.js';
 import { requireUser, isAdmin } from './_lib/auth.js';
-import { paymentCreate } from './_lib/validation.js';
+import { paymentCreate, subscribePlan, cancelSubscription } from './_lib/validation.js';
+import { getSettings, num } from './_lib/settings.js';
+import { activeSubscription } from './_lib/pricing.js';
+
+async function listPlans(supa, audience) {
+  let req = supa.from('plans').select('*').eq('is_active', true).order('audience', { ascending: true }).order('sort', { ascending: true });
+  if (audience) req = req.eq('audience', audience);
+  const { data, error } = await req;
+  if (error) throw error;
+  return data || [];
+}
 
 export default createHandler(async function handler(req, res) {
   const q = query(req);
@@ -14,6 +24,17 @@ export default createHandler(async function handler(req, res) {
   const ctx = await requireUser(req);
 
   if (req.method === 'GET') {
+    if (action === 'plans') {
+      const plans = await listPlans(supa, q.audience);
+      return res.status(200).json(successEnvelope(plans));
+    }
+
+    if (action === 'subscription') {
+      const audience = q.audience === 'owner' ? 'owner' : 'customer';
+      const subscription = await activeSubscription(supa, ctx.user.id, audience);
+      return res.status(200).json(successEnvelope({ subscription, plan: subscription ? subscription.plans : null }));
+    }
+
     if (!q.booking_id && !q.id) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing booking_id or id')));
     let request = supa.from('payments').select('*');
     request = q.id ? request.eq('id', q.id) : request.eq('booking_id', q.booking_id);
@@ -55,6 +76,49 @@ export default createHandler(async function handler(req, res) {
         configured,
       }));
     }
+
+    if (action === 'subscribe') {
+      const parsed = subscribePlan.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const { data: plan } = await supa.from('plans').select('*').eq('id', parsed.data.plan_id).eq('is_active', true).maybeSingle();
+      if (!plan) return res.status(404).json(errorEnvelope(new ApiError('NOT_FOUND', 'Plan not available', 404)));
+
+      // replace any existing active subscription for this audience
+      await supa.from('subscriptions')
+        .update({ status: 'canceled', updated_at: new Date().toISOString() })
+        .eq('user_id', ctx.user.id).eq('audience', plan.audience).in('status', ['active', 'trialing']);
+
+      const periodEnd = new Date();
+      periodEnd.setMonth(periodEnd.getMonth() + 1);
+      const { data: subscription, error } = await supa.from('subscriptions').insert({
+        user_id: ctx.user.id,
+        plan_id: plan.id,
+        audience: plan.audience,
+        status: 'active',
+        current_period_end: periodEnd.toISOString(),
+      }).select().single();
+      if (error) return res.status(400).json(errorEnvelope(error));
+
+      if (num(plan.price_monthly, 0) > 0) {
+        await supa.from('transactions').insert({
+          laundromat_id: null,
+          type: `subscription:${plan.code}`,
+          amount: num(plan.price_monthly, 0),
+          currency: plan.currency || 'ZAR',
+        });
+      }
+      return res.status(201).json(successEnvelope({ subscription, plan }));
+    }
+
+    if (action === 'cancel-subscription') {
+      const parsed = cancelSubscription.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      await supa.from('subscriptions')
+        .update({ status: 'canceled', updated_at: new Date().toISOString() })
+        .eq('user_id', ctx.user.id).eq('audience', parsed.data.audience).in('status', ['active', 'trialing']);
+      return res.status(200).json(successEnvelope({ canceled: true, audience: parsed.data.audience }));
+    }
+
     return res.status(405).json(errorEnvelope(new ApiError('METHOD_NOT_ALLOWED', 'Method not allowed', 405)));
   }
 

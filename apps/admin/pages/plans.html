@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Plans - LaundroMaster</title>
+  <link rel="stylesheet" href="../../../shared/css/tokens.css?v=4">
+  <link rel="stylesheet" href="../../../shared/css/reset.css?v=4">
+  <link rel="stylesheet" href="../../../shared/css/layout.css?v=4">
+  <link rel="stylesheet" href="../../../shared/css/buttons.css?v=4">
+  <link rel="stylesheet" href="../../../shared/css/cards.css?v=4">
+  <link rel="stylesheet" href="../../../shared/css/forms.css?v=4">
+  <link rel="stylesheet" href="../../../shared/css/utilities.css?v=4">
+  <link rel="stylesheet" href="../../../shared/css/motion.css?v=4">
+  <link rel="stylesheet" href="../css/admin.css?v=4">
+</head>
+<body data-admin-page="plans">
+  <aside class="sidebar">
+    <a class="brand" href="../index.html">LM Admin</a>
+    <nav class="side-nav">
+      <a href="../index.html">Dashboard</a>
+      <a href="laundromats.html">Laundromats</a>
+      <a href="verifications.html">Verifications</a>
+      <a href="users.html">Users</a>
+      <a href="plans.html">Plans</a>
+      <a href="commissions.html">Commissions</a>
+      <a href="payouts.html">Payouts</a>
+      <a href="promotions.html">Promotions</a>
+      <a href="refunds.html">Refunds</a>
+      <a href="settings.html">Settings</a>
+      <a href="audit.html">Audit</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header class="topbar page-shell flex justify-between">
+      <h1>Plans</h1>
+      <div id="sessionMount" class="session-control"></div>
+    </header>
+    <div class="page-shell content">
+      <p class="text-muted" style="margin-bottom:var(--space-4)">Owner SaaS tiers and the customer LaundroMaster+ plan. Commission % overrides the platform default per plan.</p>
+      <div class="section-head"><h2>New plan</h2></div>
+      <form class="card" id="newForm" style="max-width:640px; margin-bottom:var(--space-6)">
+        <div class="card-body stack">
+          <div class="field"><label class="label" for="n_code">Code</label><input class="input" id="n_code" required></div>
+          <div class="field"><label class="label" for="n_name">Name</label><input class="input" id="n_name" required></div>
+          <div class="field"><label class="label" for="n_audience">Audience</label>
+            <select class="input" id="n_audience"><option value="owner">Owner</option><option value="customer">Customer</option></select>
+          </div>
+          <div class="field"><label class="label" for="n_price">Monthly price</label><input class="input" id="n_price" type="number" step="0.01" value="0"></div>
+          <div class="field"><label class="label" for="n_commission">Commission %</label><input class="input" id="n_commission" type="number" step="0.1" value="8"></div>
+          <div class="field"><label class="label" for="n_features">Features (one per line)</label><textarea class="input" id="n_features" rows="3"></textarea></div>
+          <button class="btn btn-primary" type="submit">Create plan</button>
+        </div>
+      </form>
+      <div class="section-head"><h2>Existing plans</h2></div>
+      <div id="list" class="stack"></div>
+    </div>
+  </main>
+  <script src="../js/config.js?v=4"></script>
+  <script type="module" src="../js/plans.js?v=4"></script>
+</body>
+</html>

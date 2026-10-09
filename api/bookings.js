@@ -4,6 +4,11 @@ import { adminClient } from './_lib/supabase-admin.js';
 import { query, body } from './_lib/req.js';
 import { requireUser, requireRoles, isAdmin, isOwner } from './_lib/auth.js';
 import { bookingCreate, bookingUpdateStatus } from './_lib/validation.js';
+import { getSettings } from './_lib/settings.js';
+import {
+  ownerCommissionPercent, isCustomerSubscriber, computeDeliveryFee,
+  computeCharges, recordCompletionLedger, reverseCompletionLedger,
+} from './_lib/pricing.js';
 
 const CANCELLABLE = ['pending_payment', 'pending_acceptance'];
 
@@ -70,7 +75,7 @@ export default createHandler(async function handler(req, res) {
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
       const input = parsed.data;
 
-      const { data: biz } = await supa.from('laundromats').select('id, verification_status').eq('id', input.laundromat_id).maybeSingle();
+      const { data: biz } = await supa.from('laundromats').select('id, owner_id, verification_status').eq('id', input.laundromat_id).maybeSingle();
       if (!biz || (biz.verification_status !== 'approved' && !isAdmin(ctx))) {
         return res.status(400).json(errorEnvelope(new ApiError('INVALID_LAUNDROMAT', 'Laundromat is not available for booking')));
       }
@@ -102,12 +107,19 @@ export default createHandler(async function handler(req, res) {
         });
       }
 
-      const deliveryFee = 0;
+      const customerId = isAdmin(ctx) && input.customer_id ? input.customer_id : ctx.user.id;
+
+      const settings = await getSettings(supa);
+      const commissionPercent = await ownerCommissionPercent(supa, biz.owner_id, settings);
+      const hasCustomerPlan = await isCustomerSubscriber(supa, customerId);
+      const deliveryFee = computeDeliveryFee(settings, {
+        deliveryRequired: input.delivery_required,
+        pickupRequired: input.pickup_required,
+        hasCustomerPlan,
+      });
       const tax = 0;
       const discount = 0;
-      const total = subtotal + deliveryFee + tax - discount;
-
-      const customerId = isAdmin(ctx) && input.customer_id ? input.customer_id : ctx.user.id;
+      const charges = computeCharges({ subtotal, deliveryFee, tax, discount, commissionPercent });
 
       const { data: booking, error: bookingErr } = await supa
         .from('bookings')
@@ -115,12 +127,15 @@ export default createHandler(async function handler(req, res) {
           customer_id: customerId,
           laundromat_id: input.laundromat_id,
           status: 'pending_payment',
-          currency: 'ZAR',
-          subtotal_amount: subtotal,
+          currency: settings.currency || 'ZAR',
+          subtotal_amount: charges.subtotal,
           delivery_fee: deliveryFee,
           tax_amount: tax,
           discount_amount: discount,
-          total_amount: total,
+          total_amount: charges.total,
+          commission_amount: charges.commission,
+          platform_fee: charges.platformFee,
+          owner_net: charges.ownerNet,
           pickup_required: input.pickup_required || false,
           delivery_required: input.delivery_required || false,
           pickup_address: input.pickup_address || null,
@@ -157,6 +172,12 @@ export default createHandler(async function handler(req, res) {
         .single();
       if (error) return res.status(400).json(errorEnvelope(error));
       await supa.from('booking_status_history').insert({ booking_id, status, actor_id: ctx.user.id, reason: reason || null });
+
+      if (status === 'completed') {
+        await recordCompletionLedger(supa, booking_id);
+      } else if (status === 'cancelled' || status === 'rejected') {
+        await reverseCompletionLedger(supa, booking_id, 'booking_reversal');
+      }
       return res.status(200).json(successEnvelope(data));
     }
 
@@ -178,6 +199,7 @@ export default createHandler(async function handler(req, res) {
         .single();
       if (error) return res.status(400).json(errorEnvelope(error));
       await supa.from('booking_status_history').insert({ booking_id: bookingId, status: 'cancelled', actor_id: ctx.user.id });
+      await reverseCompletionLedger(supa, bookingId, 'booking_reversal');
       return res.status(200).json(successEnvelope(data));
     }
 
