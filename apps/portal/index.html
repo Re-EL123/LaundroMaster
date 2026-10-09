@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="LaundroMaster — sign in to the customer, owner or admin portal.">
-  <title>LaundroMaster — Sign in</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Sign in to LaundroMaster to book laundry, track orders, or manage your laundromat.">
+  <title>Sign in · LaundroMaster</title>
+  <link rel="icon" href="../../shared/assets/favicon.png">
   <link rel="stylesheet" href="../../shared/css/tokens.css">
   <link rel="stylesheet" href="../../shared/css/reset.css">
-  <link rel="stylesheet" href="../../shared/css/layout.css">
   <link rel="stylesheet" href="../../shared/css/buttons.css">
   <link rel="stylesheet" href="../../shared/css/forms.css">
   <link rel="stylesheet" href="../../shared/css/utilities.css">
@@ -16,70 +16,114 @@
 </head>
 <body class="portal">
   <main class="portal-shell">
-    <section class="portal-brand">
-      <a class="brand" href="./index.html">LaundroMaster</a>
-      <h1>One account, every portal.</h1>
-      <p class="text-muted">Sign in and we'll take you to the right place — customer, owner or admin.</p>
-      <ul class="role-list">
-        <li><strong>Customers</strong> discover, book and track laundry.</li>
-        <li><strong>Owners</strong> manage services, bookings and earnings.</li>
-        <li><strong>Admins</strong> verify businesses and oversee the platform.</li>
+    <section class="portal-hero">
+      <a class="portal-logo" href="./index.html" aria-label="LaundroMaster home">
+        <img src="../../shared/assets/logo.png" alt="LaundroMaster" width="480" height="480">
+      </a>
+      <h1>Clean clothes, zero hassle.</h1>
+      <p class="portal-lead">
+        Sign in to book a pickup, track your order, or manage your laundromat — all in one place.
+      </p>
+      <ul class="portal-perks">
+        <li>
+          <span class="perk-check" aria-hidden="true">
+            <svg viewBox="0 0 20 20" width="14" height="14"><path d="M4 10.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span><strong>Customers</strong> discover and book trusted laundromats near you.</li>
+        <li>
+          <span class="perk-check" aria-hidden="true">
+            <svg viewBox="0 0 20 20" width="14" height="14"><path d="M4 10.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span><strong>Owners</strong> manage services, bookings and earnings with ease.</span>
+        </li>
       </ul>
     </section>
 
-    <section class="portal-card card" aria-labelledby="authTitle">
-      <div class="card-body">
-        <div class="tabs" role="tablist" aria-label="Account">
-          <button class="tab is-active" id="tabLogin" role="tab" aria-selected="true" type="button">Sign in</button>
-          <button class="tab" id="tabRegister" role="tab" aria-selected="false" type="button">Create account</button>
+    <section class="portal-card" aria-labelledby="authTitle">
+      <div class="portal-tabs" role="tablist" aria-label="Account access">
+        <button class="portal-tab is-active" id="tabLogin" role="tab" aria-selected="true" aria-controls="loginForm" type="button">Sign in</button>
+        <button class="portal-tab" id="tabRegister" role="tab" aria-selected="false" aria-controls="registerForm" type="button">Create account</button>
+      </div>
+
+      <form id="loginForm" class="portal-form" novalidate>
+        <h2 id="authTitle" class="portal-form-title">Welcome back</h2>
+        <p class="portal-form-sub">Enter your details to continue.</p>
+
+        <div class="field">
+          <label class="label" for="loginEmail">Email</label>
+          <input class="input" id="loginEmail" name="email" type="email" inputmode="email"
+                 autocomplete="email" placeholder="you@example.com" required>
         </div>
 
-        <form id="loginForm" class="grid" novalidate>
-          <h2 id="authTitle" class="sr-only">Sign in</h2>
-          <div class="field">
-            <label class="label" for="loginEmail">Email</label>
-            <input class="input" id="loginEmail" name="email" type="email" autocomplete="email" required>
+        <div class="field">
+          <label class="label" for="loginPassword">Password</label>
+          <div class="password-field">
+            <input class="input" id="loginPassword" name="password" type="password"
+                   autocomplete="current-password" placeholder="Your password" required minlength="6">
+            <button class="password-toggle" type="button" data-toggle="loginPassword"
+                    aria-label="Show password" aria-pressed="false">
+              <svg class="icon-eye" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 5c-5 0-9 5-9 7s4 7 9 7 9-5 9-7-4-7-9-7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              <svg class="icon-eye-off" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M12 5c-5 0-9 5-9 7s4 7 9 7 9-5 9-7-4-7-9-7z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 4l16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
           </div>
-          <div class="field">
-            <label class="label" for="loginPassword">Password</label>
-            <input class="input" id="loginPassword" name="password" type="password" autocomplete="current-password" required minlength="6">
-          </div>
-          <button class="btn btn-primary" type="submit" id="loginBtn">Sign in</button>
-          <p class="form-msg" id="loginMsg" role="status" aria-live="polite"></p>
-        </form>
+        </div>
 
-        <form id="registerForm" class="grid" hidden novalidate>
-          <div class="field">
-            <label class="label" for="regName">Full name</label>
-            <input class="input" id="regName" name="full_name" type="text" autocomplete="name" required>
-          </div>
-          <div class="field">
-            <label class="label" for="regEmail">Email</label>
-            <input class="input" id="regEmail" name="email" type="email" autocomplete="email" required>
-          </div>
-          <div class="field">
-            <label class="label" for="regPassword">Password</label>
-            <input class="input" id="regPassword" name="password" type="password" autocomplete="new-password" required minlength="6">
-            <span class="help">At least 6 characters.</span>
-          </div>
-          <div class="field">
-            <label class="label" for="regType">I am a</label>
-            <select class="select" id="regType" name="account_type">
-              <option value="customer">Customer</option>
-              <option value="owner">Business owner</option>
-            </select>
-          </div>
-          <button class="btn btn-primary" type="submit" id="registerBtn">Create account</button>
-          <p class="form-msg" id="registerMsg" role="status" aria-live="polite"></p>
-        </form>
+        <button class="btn btn-primary portal-submit" type="submit" id="loginBtn">Sign in</button>
+        <p class="form-msg" id="loginMsg" role="status" aria-live="polite"></p>
+      </form>
 
-        <p class="text-xs text-muted" style="margin-top: var(--space-4)">
-          Admin accounts are provisioned internally and cannot be self-registered.
-        </p>
-        <p class="text-sm" style="margin-top: var(--space-4)">
-          Not ready to sign in? <a href="../customer/index.html" style="color: var(--color-primary); font-weight: 600;">Browse laundromats</a>
-        </p>
-      </div>
+      <form id="registerForm" class="portal-form" hidden novalidate>
+        <h2 class="portal-form-title">Create your account</h2>
+        <p class="portal-form-sub">It only takes a minute.</p>
+
+        <div class="field">
+          <label class="label" for="regName">Full name</label>
+          <input class="input" id="regName" name="full_name" type="text"
+                 autocomplete="name" placeholder="Jane Doe" required>
+        </div>
+
+        <div class="field">
+          <label class="label" for="regEmail">Email</label>
+          <input class="input" id="regEmail" name="email" type="email" inputmode="email"
+                 autocomplete="email" placeholder="you@example.com" required>
+        </div>
+
+        <div class="field">
+          <label class="label" for="regPassword">Password</label>
+          <div class="password-field">
+            <input class="input" id="regPassword" name="password" type="password"
+                   autocomplete="new-password" placeholder="At least 6 characters" required minlength="6">
+            <button class="password-toggle" type="button" data-toggle="regPassword"
+                    aria-label="Show password" aria-pressed="false">
+              <svg class="icon-eye" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M12 5c-5 0-9 5-9 7s4 7 9 7 9-5 9-7-4-7-9-7z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              <svg class="icon-eye-off" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M12 5c-5 0-9 5-9 7s4 7 9 7 9-5 9-7-4-7-9-7z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 4l16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <span class="help">Use at least 6 characters.</span>
+        </div>
+
+        <div class="field">
+          <span class="label" id="regTypeLabel">I am a</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="regTypeLabel">
+            <label class="segment">
+              <input type="radio" name="account_type" value="customer" checked>
+              <span>Customer</span>
+            </label>
+            <label class="segment">
+              <input type="radio" name="account_type" value="owner">
+              <span>Business owner</span>
+            </label>
+          </div>
+        </div>
+
+        <button class="btn btn-primary portal-submit" type="submit" id="registerBtn">Create account</button>
+        <p class="form-msg" id="registerMsg" role="status" aria-live="polite"></p>
+      </form>
+
+      <p class="portal-foot">
+        Not ready to sign in?
+        <a href="../customer/index.html">Browse laundromats</a>
+      </p>
     </section>
   </main>
   <script src="./js/config.js"></script>
