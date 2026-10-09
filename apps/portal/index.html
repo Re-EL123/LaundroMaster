@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="LaundroMaster — sign in to the customer, owner or admin portal.">
+  <title>LaundroMaster — Sign in</title>
+  <link rel="stylesheet" href="../../shared/css/tokens.css">
+  <link rel="stylesheet" href="../../shared/css/reset.css">
+  <link rel="stylesheet" href="../../shared/css/layout.css">
+  <link rel="stylesheet" href="../../shared/css/buttons.css">
+  <link rel="stylesheet" href="../../shared/css/forms.css">
+  <link rel="stylesheet" href="../../shared/css/utilities.css">
+  <link rel="stylesheet" href="../../shared/css/motion.css">
+  <link rel="stylesheet" href="./css/portal.css">
+</head>
+<body class="portal">
+  <main class="portal-shell">
+    <section class="portal-brand">
+      <a class="brand" href="./index.html">LaundroMaster</a>
+      <h1>One account, every portal.</h1>
+      <p class="text-muted">Sign in and we'll take you to the right place — customer, owner or admin.</p>
+      <ul class="role-list">
+        <li><strong>Customers</strong> discover, book and track laundry.</li>
+        <li><strong>Owners</strong> manage services, bookings and earnings.</li>
+        <li><strong>Admins</strong> verify businesses and oversee the platform.</li>
+      </ul>
+    </section>
+
+    <section class="portal-card card" aria-labelledby="authTitle">
+      <div class="card-body">
+        <div class="tabs" role="tablist" aria-label="Account">
+          <button class="tab is-active" id="tabLogin" role="tab" aria-selected="true" type="button">Sign in</button>
+          <button class="tab" id="tabRegister" role="tab" aria-selected="false" type="button">Create account</button>
+        </div>
+
+        <form id="loginForm" class="grid" novalidate>
+          <h2 id="authTitle" class="sr-only">Sign in</h2>
+          <div class="field">
+            <label class="label" for="loginEmail">Email</label>
+            <input class="input" id="loginEmail" name="email" type="email" autocomplete="email" required>
+          </div>
+          <div class="field">
+            <label class="label" for="loginPassword">Password</label>
+            <input class="input" id="loginPassword" name="password" type="password" autocomplete="current-password" required minlength="6">
+          </div>
+          <button class="btn btn-primary" type="submit" id="loginBtn">Sign in</button>
+          <p class="form-msg" id="loginMsg" role="status" aria-live="polite"></p>
+        </form>
+
+        <form id="registerForm" class="grid" hidden novalidate>
+          <div class="field">
+            <label class="label" for="regName">Full name</label>
+            <input class="input" id="regName" name="full_name" type="text" autocomplete="name" required>
+          </div>
+          <div class="field">
+            <label class="label" for="regEmail">Email</label>
+            <input class="input" id="regEmail" name="email" type="email" autocomplete="email" required>
+          </div>
+          <div class="field">
+            <label class="label" for="regPassword">Password</label>
+            <input class="input" id="regPassword" name="password" type="password" autocomplete="new-password" required minlength="6">
+            <span class="help">At least 6 characters.</span>
+          </div>
+          <div class="field">
+            <label class="label" for="regType">I am a</label>
+            <select class="select" id="regType" name="account_type">
+              <option value="customer">Customer</option>
+              <option value="owner">Business owner</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" type="submit" id="registerBtn">Create account</button>
+          <p class="form-msg" id="registerMsg" role="status" aria-live="polite"></p>
+        </form>
+
+        <p class="text-xs text-muted" style="margin-top: var(--space-4)">
+          Admin accounts are provisioned internally and cannot be self-registered.
+        </p>
+      </div>
+    </section>
+  </main>
+  <script src="./js/config.js"></script>
+  <script type="module" src="./js/portal.js"></script>
+</body>
+</html>

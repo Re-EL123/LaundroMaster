@@ -27,10 +27,26 @@ jobs:
           mkdir -p dist
           cp -r apps dist/
           cp -r shared dist/
-          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=apps/customer/index.html"></head></html>' > dist/index.html
+          echo 'laundromaster.re-el.co.za' > dist/CNAME
+          cat > dist/index.html <<'HTML'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>LaundroMaster</title>
+            <meta http-equiv="refresh" content="0; url=apps/portal/index.html">
+            <link rel="canonical" href="apps/portal/index.html">
+          </head>
+          <body>
+            <p>Redirecting to the <a href="apps/portal/index.html">LaundroMaster portal</a>…</p>
+          </body>
+          </html>
+          HTML
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+
   deploy:
     needs: build
     runs-on: ubuntu-latest
