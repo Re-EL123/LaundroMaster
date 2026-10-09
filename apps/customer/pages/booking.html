@@ -1,2 +1,65 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Booking</title><link rel="stylesheet" href="../../../shared/css/tokens.css"><link rel="stylesheet" href="../../../shared/css/reset.css"><link rel="stylesheet" href="../../../shared/css/layout.css"><link rel="stylesheet" href="../../../shared/css/buttons.css"><link rel="stylesheet" href="../../../shared/css/cards.css"><link rel="stylesheet" href="../../../shared/css/forms.css"><link rel="stylesheet" href="../../../shared/css/utilities.css"><link rel="stylesheet" href="../../../shared/css/motion.css"><link rel="stylesheet" href="../css/customer.css"></head><body><header class="app-header"><div class="page-shell flex justify-between"><a href="../index.html" class="brand">LaundroMaster</a></div></header><main class="page-shell" style="padding:var(--space-6) 0"><article class="card"><div class="card-body"><h1>Booking</h1><form id="frm" class="grid"><div class="field"><label class="label">Laundromat ID</label><input class="input" name="laundromat_id" required></div><div class="field"><label class="label">Customer ID</label><input class="input" name="customer_id" required></div><button class="btn btn-primary" type="submit">Create booking</button><p id="msg" class="text-sm"></p></form></div></article></main><script type="module" src="../js/booking.js"></script>  <script src="../js/config.js"></script>
-</body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Booking - LaundroMaster</title>
+  <link rel="stylesheet" href="../../../shared/css/tokens.css">
+  <link rel="stylesheet" href="../../../shared/css/reset.css">
+  <link rel="stylesheet" href="../../../shared/css/layout.css">
+  <link rel="stylesheet" href="../../../shared/css/buttons.css">
+  <link rel="stylesheet" href="../../../shared/css/cards.css">
+  <link rel="stylesheet" href="../../../shared/css/forms.css">
+  <link rel="stylesheet" href="../../../shared/css/utilities.css">
+  <link rel="stylesheet" href="../../../shared/css/motion.css">
+  <link rel="stylesheet" href="../css/customer.css">
+</head>
+<body>
+  <header class="app-header" id="appHeader"></header>
+  <main class="page-shell" style="padding: var(--space-6) 0;">
+    <h1 class="page-title">Complete your booking</h1>
+    <div class="layout-split grid">
+      <form id="frm" class="card">
+        <div class="card-body">
+          <div id="summary"><p class="text-muted">Loading your selection…</p></div>
+
+          <fieldset class="grid">
+            <legend>Collection &amp; delivery</legend>
+            <label class="flex"><input type="checkbox" id="pickup_required" name="pickup_required"> Pickup required</label>
+            <label class="flex"><input type="checkbox" id="delivery_required" name="delivery_required"> Delivery required</label>
+            <div class="field" id="pickupAddressField" hidden>
+              <label class="label" for="pickup_address">Pickup address</label>
+              <input class="input" id="pickup_address" name="pickup_address" autocomplete="street-address">
+            </div>
+            <div class="field" id="deliveryAddressField" hidden>
+              <label class="label" for="delivery_address">Delivery address</label>
+              <input class="input" id="delivery_address" name="delivery_address" autocomplete="street-address">
+            </div>
+          </fieldset>
+
+          <div class="field">
+            <label class="label" for="scheduled_at">Preferred date &amp; time</label>
+            <input class="input" id="scheduled_at" name="scheduled_at" type="datetime-local">
+          </div>
+          <div class="field">
+            <label class="label" for="customer_notes">Notes</label>
+            <textarea class="textarea" id="customer_notes" name="customer_notes" rows="3" placeholder="Anything we should know?"></textarea>
+          </div>
+
+          <button class="btn btn-primary" type="submit" id="submitBtn">Place booking</button>
+          <p class="form-msg" id="msg" role="status" aria-live="polite"></p>
+        </div>
+      </form>
+
+      <aside class="card">
+        <div class="card-body">
+          <h2 class="card-title">Order summary</h2>
+          <div id="orderSummary"><p class="text-muted">No items selected.</p></div>
+        </div>
+      </aside>
+    </div>
+  </main>
+  <script src="../js/config.js"></script>
+  <script type="module" src="../js/booking.js"></script>
+</body>
+</html>

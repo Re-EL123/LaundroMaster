@@ -1,5 +1,2 @@
-export function requireRole(user, roles=[]) {
-  const role = user?.role || user?.user_metadata?.role;
-  if (roles.length && !roles.includes(role)) throw new Error('Forbidden');
-  return true;
-}
+// Kept for backwards compatibility. Prefer ./auth.js
+export { requireUser, requireRoles as requireRole, isAdmin, isOwner, topRole, ROLE_PRIORITY } from './auth.js';

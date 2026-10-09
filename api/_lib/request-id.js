@@ -1,5 +1,6 @@
-export function setRequestId(req, res) {
-  const id = (req.headers['x-request-id'] || crypto?.randomUUID?.() || Math.random().toString(36)).toString();
-  if (process.env) process.env.REQUEST_ID = id;
-  return id;
+import { randomUUID } from 'node:crypto';
+
+export function newRequestId(req) {
+  const header = req && req.headers && req.headers['x-request-id'];
+  return (header || randomUUID()).toString();
 }

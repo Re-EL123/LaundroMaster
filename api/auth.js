@@ -1,10 +1,11 @@
 import { createHandler } from './_lib/handler.js';
-import { successEnvelope, errorEnvelope } from './_lib/errors.js';
+import { successEnvelope, errorEnvelope, ApiError } from './_lib/errors.js';
 import { anonClient } from './_lib/supabase-anon.js';
 import { adminClient } from './_lib/supabase-admin.js';
+import { query, body, bearer } from './_lib/req.js';
+import { getUser, requireUser, topRole, ROLE_PRIORITY } from './_lib/auth.js';
 import { z } from 'zod';
-
-const ROLE_PRIORITY = ['super_admin', 'admin', 'owner', 'staff', 'customer'];
+import { profileUpdate } from './_lib/validation.js';
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -22,7 +23,7 @@ async function resolveRole(admin, userId) {
   if (!admin || !userId) return 'customer';
   const { data } = await admin.from('user_roles').select('role').eq('user_id', userId);
   const roles = (data || []).map((r) => r.role);
-  return ROLE_PRIORITY.find((r) => roles.includes(r)) || 'customer';
+  return topRole(roles) || ROLE_PRIORITY[ROLE_PRIORITY.length - 1];
 }
 
 async function bootstrapUser(admin, user, accountType, fullName) {
@@ -55,20 +56,25 @@ async function bootstrapUser(admin, user, accountType, fullName) {
 }
 
 export default createHandler(async function handler(req, res) {
-  const action = req.query.action || '';
+  const q = query(req);
+  const action = q.action || '';
   const anon = anonClient();
   const admin = adminClient();
 
   if (!anon || !admin) {
-    return res.status(503).json(errorEnvelope({ code: 'NOT_CONFIGURED', message: 'Supabase not configured' }));
+    return res.status(503).json(errorEnvelope(new ApiError('NOT_CONFIGURED', 'Supabase not configured', 503)));
   }
 
   if (req.method === 'POST') {
     if (action === 'login') {
-      const parsed = loginSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json(errorEnvelope({ code: 'VALIDATION_ERROR', message: parsed.error.message }));
+      const parsed = loginSchema.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
       const { data, error } = await anon.auth.signInWithPassword(parsed.data);
-      if (error) return res.status(401).json(errorEnvelope({ code: 'INVALID_CREDENTIALS', message: 'Incorrect email or password' }));
+      if (error || !data.session) return res.status(401).json(errorEnvelope(new ApiError('INVALID_CREDENTIALS', 'Incorrect email or password', 401)));
+      const { data: profile } = await admin.from('profiles').select('account_status').eq('id', data.user.id).maybeSingle();
+      if (profile && profile.account_status !== 'active') {
+        return res.status(403).json(errorEnvelope(new ApiError('ACCOUNT_SUSPENDED', 'This account is not active', 403)));
+      }
       const role = await resolveRole(admin, data.user.id);
       return res.status(200).json(successEnvelope({
         access_token: data.session.access_token,
@@ -79,11 +85,11 @@ export default createHandler(async function handler(req, res) {
     }
 
     if (action === 'register') {
-      const parsed = registerSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json(errorEnvelope({ code: 'VALIDATION_ERROR', message: parsed.error.message }));
+      const parsed = registerSchema.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
       const { email, password, full_name, account_type } = parsed.data;
       const { data, error } = await anon.auth.signUp({ email, password, options: { data: { full_name, account_type } } });
-      if (error) return res.status(400).json(errorEnvelope({ code: 'REGISTRATION_FAILED', message: error.message }));
+      if (error) return res.status(400).json(errorEnvelope(new ApiError('REGISTRATION_FAILED', error.message)));
       if (data.user) await bootstrapUser(admin, data.user, account_type, full_name);
       const role = data.user ? await resolveRole(admin, data.user.id) : account_type;
       return res.status(201).json(successEnvelope({
@@ -95,16 +101,16 @@ export default createHandler(async function handler(req, res) {
     }
 
     if (action === 'logout') {
-      const token = (req.headers.authorization || '').replace('Bearer ', '');
+      const token = bearer(req);
       if (token) { try { await admin.auth.admin.signOut(token); } catch { /* best effort */ } }
       return res.status(200).json(successEnvelope({ ok: true }));
     }
 
     if (action === 'refresh') {
-      const refresh_token = (req.body && req.body.refresh_token) || '';
-      if (!refresh_token) return res.status(400).json(errorEnvelope({ code: 'VALIDATION_ERROR', message: 'Missing refresh_token' }));
+      const refresh_token = (body(req).refresh_token) || '';
+      if (!refresh_token) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing refresh_token')));
       const { data, error } = await anon.auth.refreshSession({ refresh_token });
-      if (error || !data.session) return res.status(401).json(errorEnvelope({ code: 'UNAUTHORIZED', message: 'Could not refresh session' }));
+      if (error || !data.session) return res.status(401).json(errorEnvelope(new ApiError('UNAUTHORIZED', 'Could not refresh session', 401)));
       const role = await resolveRole(admin, data.user.id);
       return res.status(200).json(successEnvelope({
         access_token: data.session.access_token,
@@ -113,22 +119,37 @@ export default createHandler(async function handler(req, res) {
         role,
       }));
     }
+
+    if (action === 'update-profile') {
+      const ctx = await requireUser(req);
+      const parsed = profileUpdate.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const patch = { ...parsed.data, updated_at: new Date().toISOString() };
+      const { data, error } = await ctx.admin.from('profiles').update(patch).eq('id', ctx.user.id).select().single();
+      if (error) return res.status(400).json(errorEnvelope(error));
+      return res.status(200).json(successEnvelope(data));
+    }
   }
 
   if (req.method === 'GET') {
     if (action === 'me') {
-      const token = (req.headers.authorization || '').replace('Bearer ', '');
-      if (!token) return res.status(401).json(errorEnvelope({ code: 'UNAUTHORIZED', message: 'Missing token' }));
-      const { data, error } = await admin.auth.getUser(token);
-      if (error || !data.user) return res.status(401).json(errorEnvelope({ code: 'UNAUTHORIZED', message: 'Invalid session' }));
-      const role = await resolveRole(admin, data.user.id);
+      const ctx = await getUser(req);
+      if (!ctx.user) return res.status(401).json(errorEnvelope(new ApiError('UNAUTHORIZED', 'Invalid session', 401)));
+      const { data: profile } = await admin.from('profiles').select('*').eq('id', ctx.user.id).maybeSingle();
       return res.status(200).json(successEnvelope({
-        user: { id: data.user.id, email: data.user.email, full_name: data.user.user_metadata?.full_name || null },
-        role,
+        user: {
+          id: ctx.user.id,
+          email: ctx.user.email,
+          full_name: (profile && profile.full_name) || ctx.user.user_metadata?.full_name || null,
+          phone: profile ? profile.phone : null,
+          avatar_path: profile ? profile.avatar_path : null,
+        },
+        roles: ctx.roles,
+        role: ctx.role,
       }));
     }
     return res.status(200).json(successEnvelope({ service: 'auth', ok: true }));
   }
 
-  return res.status(405).json(errorEnvelope({ code: 'METHOD_NOT_ALLOWED', message: 'Method not allowed' }));
+  return res.status(405).json(errorEnvelope(new ApiError('METHOD_NOT_ALLOWED', 'Method not allowed', 405)));
 });

@@ -51,10 +51,22 @@ redirects to `apps/portal/index.html`. Each app reads its API base from
 5. Note the production alias, e.g. `https://laundromaster-sable.vercel.app`.
 
 ## Steps
-1. Create Supabase project; run `supabase/migrations/0001_init.sql`.
+1. Create Supabase project; run `supabase/migrations/0001_init.sql` then
+   `supabase/migrations/0002_auth_roles.sql` (SQL editor or `supabase db push`).
 2. Create storage buckets: `avatars`, `laundromat-media`, `verification-documents`,
    `booking-attachments`, `receipts`, `platform-assets`.
 3. Configure email provider and iKhokha sandbox + webhook secret.
 4. Set env vars on Vercel; deploy.
 5. Update `apps/*/js/config.js` with the Vercel API base; push (Pages redeploys).
 6. Verify HTTPS, CORS, auth callback URLs and webhook endpoint.
+
+## Bootstrapping the first admin
+Self-registration only creates `customer` / `owner` roles. Promote an account in
+the Supabase SQL editor:
+```sql
+-- replace with the target user id (from auth.users / profiles)
+insert into user_roles (user_id, role)
+values ('00000000-0000-0000-0000-000000000000', 'admin')
+on conflict (user_id, role) do nothing;
+```
+The user is an admin on their next login (role is resolved per request).

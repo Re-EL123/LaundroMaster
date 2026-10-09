@@ -1,5 +1,11 @@
 import { login, register, me, homeForRole, getSession } from '../../../shared/js/auth-client.js';
 
+function nextTarget(role) {
+  const next = new URLSearchParams(location.search).get('next');
+  if (next && next.startsWith('/')) return next;
+  return homeForRole(role);
+}
+
 const tabLogin = document.getElementById('tabLogin');
 const tabRegister = document.getElementById('tabRegister');
 const loginForm = document.getElementById('loginForm');
@@ -42,7 +48,7 @@ loginForm.addEventListener('submit', async (e) => {
   try {
     const session = await login(loginForm.email.value.trim(), loginForm.password.value);
     setMsg(msg, 'Success — redirecting…', 'success');
-    location.href = homeForRole(session.role);
+    location.href = nextTarget(session.role);
   } catch (err) {
     setMsg(msg, err.message, 'error');
     setLoading(btn, false);
@@ -68,7 +74,7 @@ registerForm.addEventListener('submit', async (e) => {
       showTab('login');
     } else {
       setMsg(msg, 'Account created — redirecting…', 'success');
-      location.href = homeForRole(result.session.role);
+      location.href = nextTarget(result.session.role);
     }
   } catch (err) {
     setMsg(msg, err.message, 'error');
@@ -80,5 +86,5 @@ registerForm.addEventListener('submit', async (e) => {
 (async () => {
   if (!getSession()) return;
   const user = await me();
-  if (user && user.role) location.href = homeForRole(user.role);
+  if (user && user.role) location.href = nextTarget(user.role);
 })();

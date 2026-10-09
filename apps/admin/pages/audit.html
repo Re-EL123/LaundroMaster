@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Audit - LaundroMaster</title>
+  <link rel="stylesheet" href="../../../shared/css/tokens.css">
+  <link rel="stylesheet" href="../../../shared/css/reset.css">
+  <link rel="stylesheet" href="../../../shared/css/layout.css">
+  <link rel="stylesheet" href="../../../shared/css/buttons.css">
+  <link rel="stylesheet" href="../../../shared/css/cards.css">
+  <link rel="stylesheet" href="../../../shared/css/forms.css">
+  <link rel="stylesheet" href="../../../shared/css/utilities.css">
+  <link rel="stylesheet" href="../../../shared/css/motion.css">
+  <link rel="stylesheet" href="../css/admin.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="../index.html">LM Admin</a>
+    <nav class="side-nav">
+      <a href="../index.html">Dashboard</a>
+      <a href="laundromats.html">Laundromats</a>
+      <a href="verifications.html">Verifications</a>
+      <a href="users.html">Users</a>
+      <a href="audit.html">Audit</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header class="topbar page-shell flex justify-between">
+      <h1>Audit log</h1>
+      <div id="sessionMount" class="session-control"></div>
+    </header>
+    <div class="page-shell content">
+      <div id="list"></div>
+    </div>
+  </main>
+  <script src="../js/config.js"></script>
+  <script type="module" src="../js/audit.js"></script>
+</body>
+</html>

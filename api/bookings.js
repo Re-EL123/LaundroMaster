@@ -1,40 +1,188 @@
 import { createHandler } from './_lib/handler.js';
-import { successEnvelope, errorEnvelope } from './_lib/errors.js';
+import { successEnvelope, errorEnvelope, ApiError } from './_lib/errors.js';
 import { adminClient } from './_lib/supabase-admin.js';
+import { query, body } from './_lib/req.js';
+import { requireUser, requireRoles, isAdmin, isOwner } from './_lib/auth.js';
 import { bookingCreate, bookingUpdateStatus } from './_lib/validation.js';
 
+const CANCELLABLE = ['pending_payment', 'pending_acceptance'];
+
+async function ownedLaundromatIds(supa, userId) {
+  const { data } = await supa.from('laundromats').select('id').eq('owner_id', userId);
+  return (data || []).map((r) => r.id);
+}
+
+async function loadBooking(supa, id) {
+  const { data, error } = await supa
+    .from('bookings')
+    .select('*, laundromats(id, name, address, owner_id), booking_items(*)')
+    .eq('id', id)
+    .maybeSingle();
+  if (error || !data) throw new ApiError('NOT_FOUND', 'Booking not found', 404);
+  return data;
+}
+
 export default createHandler(async function handler(req, res) {
+  const q = query(req);
+  const action = q.action || '';
   const supa = adminClient();
-  if (!supa) return res.status(503).json(errorEnvelope({ code: 'NOT_CONFIGURED', message: 'Supabase not configured' }));
-  const action = req.query.action || '';
+  if (!supa) return res.status(503).json(errorEnvelope(new ApiError('NOT_CONFIGURED', 'Supabase not configured', 503)));
+
   if (req.method === 'GET') {
-    const { id } = req.query;
-    if (id) {
-      const { data, error } = await supa.from('bookings').select('*').eq('id', id).single();
-      if (error) return res.status(404).json(errorEnvelope({ code: 'NOT_FOUND', message: 'Booking not found' }));
-      return res.status(200).json(successEnvelope(data));
+    const ctx = await requireUser(req);
+
+    if (q.id) {
+      const booking = await loadBooking(supa, q.id);
+      const permitted = isAdmin(ctx)
+        || booking.customer_id === ctx.user.id
+        || (booking.laundromats && booking.laundromats.owner_id === ctx.user.id);
+      if (!permitted) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'You do not have access to this booking', 403)));
+      return res.status(200).json(successEnvelope(booking));
     }
-    const { data, error } = await supa.from('bookings').select('*').limit(50);
+
+    let request = supa
+      .from('bookings')
+      .select('*, laundromats(id, name, address), booking_items(*)')
+      .order('created_at', { ascending: false })
+      .limit(Math.min(Number(q.limit) || 50, 100));
+
+    if (q.status) request = request.eq('status', q.status);
+
+    if (isAdmin(ctx)) {
+      // all bookings
+    } else if (isOwner(ctx)) {
+      const ids = await ownedLaundromatIds(supa, ctx.user.id);
+      if (!ids.length) return res.status(200).json(successEnvelope([]));
+      request = request.in('laundromat_id', ids);
+    } else {
+      request = request.eq('customer_id', ctx.user.id);
+    }
+
+    const { data, error } = await request;
     if (error) return res.status(500).json(errorEnvelope(error));
     return res.status(200).json(successEnvelope(data || []));
   }
+
   if (req.method === 'POST') {
     if (action === 'create') {
-      const parsed = bookingCreate.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json(errorEnvelope({ code: 'VALIDATION_ERROR', message: parsed.error.message }));
-      const payload = { ...parsed.data, status: 'pending_payment', total_amount: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-      const { data, error } = await supa.from('bookings').insert(payload).select().single();
-      if (error) return res.status(400).json(errorEnvelope(error));
-      return res.status(201).json(successEnvelope(data));
+      const ctx = await requireUser(req);
+      const parsed = bookingCreate.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const input = parsed.data;
+
+      const { data: biz } = await supa.from('laundromats').select('id, verification_status').eq('id', input.laundromat_id).maybeSingle();
+      if (!biz || (biz.verification_status !== 'approved' && !isAdmin(ctx))) {
+        return res.status(400).json(errorEnvelope(new ApiError('INVALID_LAUNDROMAT', 'Laundromat is not available for booking')));
+      }
+
+      const serviceIds = [...new Set(input.items.map((i) => i.service_id))];
+      const { data: services, error: svcErr } = await supa
+        .from('services')
+        .select('id, name, base_price, is_active, laundromat_id')
+        .in('id', serviceIds);
+      if (svcErr) return res.status(400).json(errorEnvelope(svcErr));
+
+      const byId = new Map((services || []).map((s) => [s.id, s]));
+      const items = [];
+      let subtotal = 0;
+      for (const line of input.items) {
+        const svc = byId.get(line.service_id);
+        if (!svc || svc.laundromat_id !== input.laundromat_id || !svc.is_active) {
+          return res.status(400).json(errorEnvelope(new ApiError('INVALID_SERVICE', `Service ${line.service_id} is unavailable`)));
+        }
+        const unit = Number(svc.base_price) || 0;
+        const lineTotal = unit * line.quantity;
+        subtotal += lineTotal;
+        items.push({
+          service_id: svc.id,
+          service_name_snapshot: svc.name,
+          unit_price_snapshot: unit,
+          quantity: line.quantity,
+          line_total: lineTotal,
+        });
+      }
+
+      const deliveryFee = 0;
+      const tax = 0;
+      const discount = 0;
+      const total = subtotal + deliveryFee + tax - discount;
+
+      const customerId = isAdmin(ctx) && input.customer_id ? input.customer_id : ctx.user.id;
+
+      const { data: booking, error: bookingErr } = await supa
+        .from('bookings')
+        .insert({
+          customer_id: customerId,
+          laundromat_id: input.laundromat_id,
+          status: 'pending_payment',
+          currency: 'ZAR',
+          subtotal_amount: subtotal,
+          delivery_fee: deliveryFee,
+          tax_amount: tax,
+          discount_amount: discount,
+          total_amount: total,
+          pickup_required: input.pickup_required || false,
+          delivery_required: input.delivery_required || false,
+          pickup_address: input.pickup_address || null,
+          delivery_address: input.delivery_address || null,
+          scheduled_at: input.scheduled_at || null,
+          customer_notes: input.customer_notes || null,
+        })
+        .select()
+        .single();
+      if (bookingErr) return res.status(400).json(errorEnvelope(bookingErr));
+
+      await supa.from('booking_items').insert(items.map((i) => ({ ...i, booking_id: booking.id })));
+      await supa.from('booking_status_history').insert({ booking_id: booking.id, status: 'pending_payment', actor_id: ctx.user.id });
+
+      const full = await loadBooking(supa, booking.id);
+      return res.status(201).json(successEnvelope(full));
     }
+
     if (action === 'update-status') {
-      const parsed = bookingUpdateStatus.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json(errorEnvelope({ code: 'VALIDATION_ERROR', message: parsed.error.message }));
-      const { booking_id, status } = parsed.data;
-      const { data, error } = await supa.from('bookings').update({ status, updated_at: new Date().toISOString() }).eq('id', booking_id).select().single();
+      const ctx = await requireRoles(req, ['owner', 'staff', 'admin', 'super_admin']);
+      const parsed = bookingUpdateStatus.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const { booking_id, status, reason } = parsed.data;
+
+      const existing = await loadBooking(supa, booking_id);
+      const permitted = isAdmin(ctx) || (existing.laundromats && existing.laundromats.owner_id === ctx.user.id);
+      if (!permitted) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your booking', 403)));
+
+      const { data, error } = await supa
+        .from('bookings')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', booking_id)
+        .select()
+        .single();
       if (error) return res.status(400).json(errorEnvelope(error));
+      await supa.from('booking_status_history').insert({ booking_id, status, actor_id: ctx.user.id, reason: reason || null });
       return res.status(200).json(successEnvelope(data));
     }
+
+    if (action === 'cancel') {
+      const ctx = await requireUser(req);
+      const bookingId = (body(req).booking_id) || q.id;
+      if (!bookingId) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing booking_id')));
+      const existing = await loadBooking(supa, bookingId);
+      const permitted = existing.customer_id === ctx.user.id || isAdmin(ctx);
+      if (!permitted) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your booking', 403)));
+      if (!CANCELLABLE.includes(existing.status) && !isAdmin(ctx)) {
+        return res.status(400).json(errorEnvelope(new ApiError('INVALID_STATE', 'This booking can no longer be cancelled')));
+      }
+      const { data, error } = await supa
+        .from('bookings')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', bookingId)
+        .select()
+        .single();
+      if (error) return res.status(400).json(errorEnvelope(error));
+      await supa.from('booking_status_history').insert({ booking_id: bookingId, status: 'cancelled', actor_id: ctx.user.id });
+      return res.status(200).json(successEnvelope(data));
+    }
+
+    return res.status(405).json(errorEnvelope(new ApiError('METHOD_NOT_ALLOWED', 'Method not allowed', 405)));
   }
-  return res.status(405).json(errorEnvelope({ code: 'METHOD_NOT_ALLOWED', message: 'Method not allowed' }));
+
+  return res.status(405).json(errorEnvelope(new ApiError('METHOD_NOT_ALLOWED', 'Method not allowed', 405)));
 });

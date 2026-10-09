@@ -1,2 +1,55 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Owner Bookings</title><link rel="stylesheet" href="../../../shared/css/tokens.css"><link rel="stylesheet" href="../../../shared/css/reset.css"><link rel="stylesheet" href="../../../shared/css/layout.css"><link rel="stylesheet" href="../../../shared/css/buttons.css"><link rel="stylesheet" href="../../../shared/css/cards.css"><link rel="stylesheet" href="../../../shared/css/forms.css"><link rel="stylesheet" href="../../../shared/css/utilities.css"><link rel="stylesheet" href="../../../shared/css/motion.css"><link rel="stylesheet" href="../css/owner.css"></head><body><aside class="sidebar"><div class="brand">LM Owner</div><nav class="side-nav"><a href="../index.html">Dashboard</a><a href="bookings.html">Bookings</a><a href="services.html">Services</a><a href="earnings.html">Earnings</a><a href="settings.html">Settings</a></nav></aside><main class="main"><header class="topbar page-shell"><h1>Bookings</h1></header><div class="page-shell" style="padding:var(--space-6)"><div class="card-grid" id="list"></div></div></main><script type="module" src="../js/bookings.js"></script>  <script src="../js/config.js"></script>
-</body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Owner Bookings - LaundroMaster</title>
+  <link rel="stylesheet" href="../../../shared/css/tokens.css">
+  <link rel="stylesheet" href="../../../shared/css/reset.css">
+  <link rel="stylesheet" href="../../../shared/css/layout.css">
+  <link rel="stylesheet" href="../../../shared/css/buttons.css">
+  <link rel="stylesheet" href="../../../shared/css/cards.css">
+  <link rel="stylesheet" href="../../../shared/css/forms.css">
+  <link rel="stylesheet" href="../../../shared/css/utilities.css">
+  <link rel="stylesheet" href="../../../shared/css/motion.css">
+  <link rel="stylesheet" href="../css/owner.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="../index.html">LM Owner</a>
+    <nav class="side-nav">
+      <a href="../index.html">Dashboard</a>
+      <a href="bookings.html">Bookings</a>
+      <a href="services.html">Services</a>
+      <a href="earnings.html">Earnings</a>
+      <a href="settings.html">Settings</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header class="topbar page-shell flex justify-between">
+      <h1>Bookings</h1>
+      <div id="sessionMount" class="session-control"></div>
+    </header>
+    <div class="page-shell content">
+      <div class="toolbar">
+        <div class="field">
+          <label class="label" for="statusFilter">Filter by status</label>
+          <select class="select" id="statusFilter">
+            <option value="">All</option>
+            <option value="pending_acceptance">Awaiting acceptance</option>
+            <option value="accepted">Accepted</option>
+            <option value="washing">Washing</option>
+            <option value="ready">Ready</option>
+            <option value="out_for_delivery">Out for delivery</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+      </div>
+      <div class="card-grid" id="list"></div>
+    </div>
+  </main>
+  <script src="../js/config.js"></script>
+  <script type="module" src="../js/bookings.js"></script>
+</body>
+</html>
