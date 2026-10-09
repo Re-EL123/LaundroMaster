@@ -3,6 +3,7 @@ import { skeleton, emptyState, errorState, toast, badge } from '../../../shared/
 import { escapeHtml, currency, formatDate, param } from '../../../shared/js/format.js';
 import { mountCustomerHeader, requireCustomer } from '../../../shared/js/chrome.js';
 import { getSession, portalUrl } from '../../../shared/js/auth-client.js';
+import { uploadImage, publicUrl } from '../../../shared/js/uploads.js';
 import { serviceCard } from './components.js';
 
 mountCustomerHeader('');
@@ -97,13 +98,17 @@ async function loadReviews() {
   try {
     const { data: reviews } = await api.get(`/reviews?laundromat_id=${encodeURIComponent(id)}`);
     if (!reviews.length) return emptyState(reviewsEl, 'No reviews yet.');
-    reviewsEl.innerHTML = reviews.map((r) => `<article class="card" style="margin-bottom:var(--space-3)">
+    reviewsEl.innerHTML = reviews.map((r) => {
+      const photos = Array.isArray(r.photos) ? r.photos : [];
+      return `<article class="card" style="margin-bottom:var(--space-3)">
       <div class="card-body">
         <p class="rating">${'\u2605'.repeat(r.rating)}<span class="text-muted">${'\u2606'.repeat(5 - r.rating)}</span></p>
         <p>${escapeHtml(r.review_text || '')}</p>
+        ${photos.length ? `<div class="gallery mt-2">${photos.map((p) => `<span class="gallery-item"><img src="${publicUrl('laundromat-media', p)}" alt="" loading="lazy"></span>`).join('')}</div>` : ''}
         <p class="text-xs text-muted">${escapeHtml((r.profiles && r.profiles.full_name) || 'Customer')} · ${formatDate(r.created_at)}</p>
       </div>
-    </article>`).join('');
+    </article>`;
+    }).join('');
   } catch (err) {
     errorState(reviewsEl, err.message || 'Failed to load reviews.');
   }
@@ -126,6 +131,35 @@ favBtn.addEventListener('click', async () => {
   }
 });
 
+const reviewPhotos = [];
+const reviewGallery = document.getElementById('reviewGallery');
+const reviewPhotoInput = document.getElementById('reviewPhotoInput');
+document.getElementById('reviewAddPhoto').addEventListener('click', () => {
+  if (reviewPhotos.length >= 6) return toast('Up to 6 photos', 'danger');
+  reviewPhotoInput.click();
+});
+reviewPhotoInput.addEventListener('change', async () => {
+  const file = reviewPhotoInput.files && reviewPhotoInput.files[0];
+  reviewPhotoInput.value = '';
+  if (!file) return;
+  try {
+    const path = await uploadImage(file, { bucket: 'laundromat-media', prefix: `${id}/reviews` });
+    reviewPhotos.push(path);
+    const item = document.createElement('span');
+    item.className = 'gallery-item';
+    item.dataset.path = path;
+    item.innerHTML = `<img src="${publicUrl('laundromat-media', path)}" alt=""><button type="button" class="gallery-remove" aria-label="Remove">×</button>`;
+    item.querySelector('.gallery-remove').addEventListener('click', () => {
+      const i = reviewPhotos.indexOf(path);
+      if (i >= 0) reviewPhotos.splice(i, 1);
+      item.remove();
+    });
+    reviewGallery.insertBefore(item, document.getElementById('reviewAddPhoto'));
+  } catch (err) {
+    toast(err.message || 'Upload failed', 'danger');
+  }
+});
+
 document.getElementById('reviewForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = document.getElementById('reviewMsg');
@@ -133,10 +167,12 @@ document.getElementById('reviewForm').addEventListener('submit', async (e) => {
   const rating = Number(document.getElementById('rating').value);
   const review_text = document.getElementById('review_text').value.trim();
   try {
-    await api.post('/reviews', { laundromat_id: id, rating, review_text });
+    await api.post('/reviews', { laundromat_id: id, rating, review_text, photos: reviewPhotos });
     msg.textContent = 'Thanks for your review!';
     msg.classList.add('is-success');
     e.target.reset();
+    reviewPhotos.length = 0;
+    reviewGallery.querySelectorAll('.gallery-item').forEach((el) => el.remove());
     loadReviews();
   } catch (err) {
     msg.textContent = err.message || 'Could not submit review.';

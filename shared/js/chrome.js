@@ -1,6 +1,7 @@
 import { getSession, logout, portalUrl, appUrl } from './auth-client.js';
 import { escapeHtml } from './format.js';
 import { mountNotifications } from './notifications-ui.js';
+import { wireInstallButton } from './pwa.js';
 
 function customerPaths() {
   const inPages = /\/pages\//.test(location.pathname);
@@ -51,6 +52,14 @@ export function mountCustomerHeader(active = '') {
   } else {
     slot.innerHTML = `<a class="btn btn-primary" href="${portalUrl()}">Sign in</a>`;
   }
+
+  const installBtn = document.createElement('button');
+  installBtn.type = 'button';
+  installBtn.className = 'btn btn-secondary';
+  installBtn.textContent = 'Install';
+  installBtn.hidden = true;
+  host.querySelector('.page-shell')?.appendChild(installBtn);
+  wireInstallButton(installBtn);
 }
 
 export function requireCustomer() {

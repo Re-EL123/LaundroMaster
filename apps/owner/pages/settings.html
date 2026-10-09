@@ -2,17 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#D90429">
+  <link rel="icon" href="../../../shared/assets/favicon-32.png">
+  <link rel="apple-touch-icon" href="../../../shared/assets/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="LaundroMaster">
+  <link rel="manifest" href="../manifest.webmanifest">
   <title>Owner Settings - LaundroMaster</title>
-  <link rel="stylesheet" href="../../../shared/css/tokens.css?v=5">
-  <link rel="stylesheet" href="../../../shared/css/reset.css?v=5">
-  <link rel="stylesheet" href="../../../shared/css/layout.css?v=5">
-  <link rel="stylesheet" href="../../../shared/css/buttons.css?v=5">
-  <link rel="stylesheet" href="../../../shared/css/cards.css?v=5">
-  <link rel="stylesheet" href="../../../shared/css/forms.css?v=5">
-  <link rel="stylesheet" href="../../../shared/css/utilities.css?v=5">
-  <link rel="stylesheet" href="../../../shared/css/motion.css?v=5">
-  <link rel="stylesheet" href="../css/owner.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/tokens.css?v=6">
+  <link rel="stylesheet" href="../../../shared/css/reset.css?v=6">
+  <link rel="stylesheet" href="../../../shared/css/layout.css?v=6">
+  <link rel="stylesheet" href="../../../shared/css/buttons.css?v=6">
+  <link rel="stylesheet" href="../../../shared/css/cards.css?v=6">
+  <link rel="stylesheet" href="../../../shared/css/forms.css?v=6">
+  <link rel="stylesheet" href="../../../shared/css/utilities.css?v=6">
+  <link rel="stylesheet" href="../../../shared/css/motion.css?v=6">
+  <link rel="stylesheet" href="../css/owner.css?v=6">
 </head>
 <body>
   <aside class="sidebar">
@@ -34,36 +42,34 @@
       <div class="flex"><div id="notifMount"></div><div id="sessionMount" class="session-control"></div></div>
     </header>
     <div class="page-shell content">
-      <div class="layout-split grid">
-        <form class="card" id="profileForm">
-          <div class="card-body">
-            <h2 class="card-title">Business profile</h2>
-            <div class="field">
-              <label class="label" for="full_name">Contact name</label>
-              <input class="input" id="full_name" name="full_name">
-            </div>
-            <div class="field">
-              <label class="label" for="email">Email</label>
-              <input class="input" id="email" disabled>
-            </div>
-            <div class="field">
-              <label class="label" for="phone">Phone</label>
-              <input class="input" id="phone" name="phone">
-            </div>
-            <button class="btn btn-primary" type="submit" id="saveBtn">Save changes</button>
-            <p class="form-msg" id="msg" role="status" aria-live="polite"></p>
+    <div class="page-shell content stack">
+      <form class="card" id="profileForm">
+        <div class="card-body">
+          <h2 class="card-title">Contact details</h2>
+          <div class="field">
+            <label class="label" for="full_name">Contact name</label>
+            <input class="input" id="full_name" name="full_name">
           </div>
-        </form>
-        <aside class="card">
-          <div class="card-body">
-            <h2 class="card-title">Your laundromats</h2>
-            <div id="bizList"></div>
+          <div class="field">
+            <label class="label" for="email">Email</label>
+            <input class="input" id="email" disabled>
           </div>
-        </aside>
-      </div>
+          <div class="field">
+            <label class="label" for="phone">Phone</label>
+            <input class="input" id="phone" name="phone">
+          </div>
+          <button class="btn btn-primary" type="submit" id="saveBtn">Save changes</button>
+          <p class="form-msg" id="msg" role="status" aria-live="polite"></p>
+        </div>
+      </form>
+      <section class="stack">
+        <h2 class="text-sm text-muted">Branding &amp; photos</h2>
+        <div id="bizList" class="stack"></div>
+      </section>
+    </div>
     </div>
   </main>
-  <script src="../js/config.js?v=5"></script>
-  <script type="module" src="../js/settings.js?v=5"></script>
+  <script src="../js/config.js?v=6"></script>
+  <script type="module" src="../js/settings.js?v=6"></script>
 </body>
 </html>

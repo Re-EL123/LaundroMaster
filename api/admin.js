@@ -10,6 +10,7 @@ import {
 } from './_lib/validation.js';
 import { getSettings, setSettings, num } from './_lib/settings.js';
 import { round2 } from './_lib/pricing.js';
+import { notifyUser, notifyUsers } from './_lib/push.js';
 
 async function logAdmin(supa, ctx, action, targetType, targetId, detail) {
   try {
@@ -178,6 +179,16 @@ export default createHandler(async function handler(req, res) {
       const { data, error } = await supa.from('laundromats').update({ verification_status: status }).eq('id', laundromat_id).select().single();
       if (error) return res.status(400).json(errorEnvelope(error));
       await logAdmin(supa, ctx, `verification.${status}`, 'laundromat', laundromat_id, { reason: reason || null });
+      if (data && data.owner_id) {
+        const messages = {
+          approved: ['Your business is live', 'Your laundromat has been approved and is now visible to customers.'],
+          rejected: ['Verification needs attention', `Your listing was not approved. ${reason ? `Reason: ${reason}` : 'Please review your details and resubmit.'}`],
+          suspended: ['Listing suspended', 'Your listing has been suspended. Contact support for details.'],
+          pending: ['Verification in progress', 'Your listing is back under review.'],
+        };
+        const [title, body] = messages[status] || ['Listing updated', 'Your listing status changed.'];
+        await notifyUser(supa, data.owner_id, { type: `verification_${status}`, title, body, url: 'apps/owner/index.html' });
+      }
       return res.status(200).json(successEnvelope(data));
     }
 
@@ -273,6 +284,22 @@ export default createHandler(async function handler(req, res) {
       const { data, error } = await supa.from('refunds').update(patch).eq('id', refund_id).select().single();
       if (error) return res.status(400).json(errorEnvelope(error));
       await logAdmin(supa, ctx, `refund.${status}`, 'refund', refund_id, patch);
+      try {
+        const { data: payment } = await supa.from('payments').select('booking_id').eq('id', data.payment_id).maybeSingle();
+        if (payment && payment.booking_id) {
+          const { data: booking } = await supa.from('bookings').select('customer_id').eq('id', payment.booking_id).maybeSingle();
+          if (booking && booking.customer_id) {
+            const messages = {
+              approved: ['Refund approved', 'Your refund has been approved and will be processed shortly.'],
+              rejected: ['Refund declined', 'Your refund request was declined. Contact support if you have questions.'],
+              processed: ['Refund processed', 'Your refund has been processed.'],
+              pending: ['Refund update', 'Your refund request is pending review.'],
+            };
+            const [title, body] = messages[status] || ['Refund update', 'Your refund status changed.'];
+            await notifyUser(supa, booking.customer_id, { type: 'refund', title, body, url: 'apps/customer/pages/orders.html' });
+          }
+        }
+      } catch { /* notification is best effort */ }
       return res.status(200).json(successEnvelope(data));
     }
 
@@ -329,7 +356,7 @@ export default createHandler(async function handler(req, res) {
         recipients = (data || []).map((r) => r.id);
       }
       if (recipients.length) {
-        await supa.from('notifications').insert(recipients.map((uid) => ({ user_id: uid, title, body: message, type: 'admin' })));
+        await notifyUsers(supa, recipients, { type: 'admin', title, body: message, url: null });
       }
       await logAdmin(supa, ctx, 'notification.broadcast', 'platform', null, { audience, count: recipients.length });
       return res.status(200).json(successEnvelope({ sent: recipients.length }));

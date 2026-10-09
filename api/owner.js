@@ -3,7 +3,7 @@ import { successEnvelope, errorEnvelope, ApiError } from './_lib/errors.js';
 import { adminClient } from './_lib/supabase-admin.js';
 import { query, body } from './_lib/req.js';
 import { requireRoles } from './_lib/auth.js';
-import { serviceCreate, serviceUpdate, promotionCreate, payoutRequest } from './_lib/validation.js';
+import { serviceCreate, serviceUpdate, promotionCreate, payoutRequest, ownerLaundromatUpdate } from './_lib/validation.js';
 import { getSettings, num } from './_lib/settings.js';
 import { round2, activeSubscription, defaultPlan } from './_lib/pricing.js';
 
@@ -102,7 +102,7 @@ export default createHandler(async function handler(req, res) {
     if (action === 'verification') {
       if (!ids.length) return res.status(200).json(successEnvelope([]));
       const [{ data: laundromats }, { data: services }, { data: hours }, { data: zones }] = await Promise.all([
-        supa.from('laundromats').select('id, name, verification_status, business_status, is_featured, featured_until, address, phone, description, logo_url').in('id', ids),
+        supa.from('laundromats').select('id, name, verification_status, business_status, is_featured, featured_until, address, phone, description, logo_path').in('id', ids),
         supa.from('services').select('laundromat_id, is_active').in('laundromat_id', ids),
         supa.from('operating_hours').select('laundromat_id').in('laundromat_id', ids),
         supa.from('delivery_zones').select('laundromat_id').in('laundromat_id', ids),
@@ -115,7 +115,7 @@ export default createHandler(async function handler(req, res) {
         const checks = [
           { key: 'profile', label: 'Business profile complete', done: Boolean(l.name && l.address && l.phone) },
           { key: 'description', label: 'Description added', done: Boolean(l.description) },
-          { key: 'logo', label: 'Logo uploaded', done: Boolean(l.logo_url) },
+          { key: 'logo', label: 'Logo uploaded', done: Boolean(l.logo_path) },
           { key: 'services', label: 'At least one active service', done: (svcCount.get(l.id) || 0) > 0 },
           { key: 'hours', label: 'Operating hours set', done: hourSet.has(l.id) },
           { key: 'zones', label: 'Delivery zones configured', done: zoneSet.has(l.id) },
@@ -156,6 +156,15 @@ export default createHandler(async function handler(req, res) {
       return res.status(200).json(successEnvelope({ subscription, plan, plans: plans || [] }));
     }
 
+    if (action === 'branding') {
+      const { data, error } = await supa.from('laundromats')
+        .select('id, name, description, address, phone, logo_path, photos, verification_status')
+        .in('id', ids)
+        .order('name');
+      if (error) return res.status(400).json(errorEnvelope(error));
+      return res.status(200).json(successEnvelope(data || []));
+    }
+
     if (action === 'promotions') {
       const { data, error } = await supa.from('promotions').select('*, laundromats(id, name, view_count)').eq('owner_id', ctx.user.id).order('created_at', { ascending: false });
       if (error) return res.status(500).json(errorEnvelope(error));
@@ -187,6 +196,20 @@ export default createHandler(async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
+    if (action === 'laundromat-update') {
+      const parsed = ownerLaundromatUpdate.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const { laundromat_id, ...patch } = parsed.data;
+      if (!ids.includes(laundromat_id)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
+      const { data, error } = await supa.from('laundromats')
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq('id', laundromat_id)
+        .select()
+        .single();
+      if (error) return res.status(400).json(errorEnvelope(error));
+      return res.status(200).json(successEnvelope(data));
+    }
+
     if (action === 'service-create') {
       const parsed = serviceCreate.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));

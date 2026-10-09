@@ -2,6 +2,7 @@ import { api } from '../../../shared/js/api-client.js';
 import { skeleton, emptyState, errorState, badge, toast } from '../../../shared/js/ui.js';
 import { escapeHtml, currency } from '../../../shared/js/format.js';
 import { mountDashboard } from '../../../shared/js/shell.js';
+import { uploadImage, publicUrl } from '../../../shared/js/uploads.js';
 
 (async function () {
   const user = await mountDashboard({ allowed: ['owner', 'staff', 'admin', 'super_admin'] });
@@ -58,6 +59,7 @@ import { mountDashboard } from '../../../shared/js/shell.js';
       if (!services.length) return emptyState(list, 'No services yet. Add your first one.');
       list.innerHTML = services.map((s) => `<article class="card">
         <div class="card-body">
+          ${s.image_path ? `<img class="service-thumb" src="${publicUrl('laundromat-media', s.image_path)}" alt="">` : ''}
           ${badge(s.is_active ? 'active' : 'inactive', s.is_active ? 'success' : 'danger')}
           <h3 class="card-title">${escapeHtml(s.name)}</h3>
           <p class="card-meta">${escapeHtml(s.description || '')}</p>
@@ -70,6 +72,27 @@ import { mountDashboard } from '../../../shared/js/shell.js';
     } catch (err) {
       errorState(list, err.message || 'Failed to load services.');
     }
+  }
+
+  let serviceImagePath = null;
+  const imageInput = document.getElementById('serviceImageInput');
+  const imageBtn = document.getElementById('serviceImageBtn');
+  const imagePreview = document.getElementById('serviceImagePreview');
+  if (imageBtn) {
+    if (imagePreview) imagePreview.style.visibility = 'hidden';
+    imageBtn.addEventListener('click', () => imageInput.click());
+    imageInput.addEventListener('change', async () => {
+      const file = imageInput.files && imageInput.files[0];
+      imageInput.value = '';
+      if (!file) return;
+      try {
+        imagePreview.src = URL.createObjectURL(file);
+        imagePreview.style.visibility = 'visible';
+        serviceImagePath = await uploadImage(file, { bucket: 'laundromat-media', prefix: 'services' });
+      } catch (err) {
+        toast(err.message || 'Upload failed', 'danger');
+      }
+    });
   }
 
   form.addEventListener('submit', async (e) => {
@@ -89,10 +112,13 @@ import { mountDashboard } from '../../../shared/js/shell.js';
         description: document.getElementById('description').value.trim() || null,
         base_price: Number(document.getElementById('base_price').value) || 0,
         turnaround_hours: Number(document.getElementById('turnaround_hours').value) || 24,
+        image_path: serviceImagePath,
       });
       msg.textContent = 'Service added.';
       msg.classList.add('is-success');
       form.reset();
+      serviceImagePath = null;
+      if (imagePreview) { imagePreview.removeAttribute('src'); imagePreview.style.visibility = 'hidden'; }
       loadLaundromats();
       load();
     } catch (err) {

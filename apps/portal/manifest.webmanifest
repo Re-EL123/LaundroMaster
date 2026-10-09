@@ -1,7 +1,7 @@
 {
   "name": "LaundroMaster",
   "short_name": "LaundroMaster",
-  "description": "Book laundry pickup and delivery from nearby laundromats.",
+  "description": "Clean clothes, zero hassle — sign in to LaundroMaster.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -9,8 +9,8 @@
   "background_color": "#F7F7F8",
   "theme_color": "#D90429",
   "icons": [
-    { "src": "../../shared/assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "../../shared/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "../shared/assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "../shared/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "../../shared/assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

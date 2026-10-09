@@ -1,7 +1,7 @@
 {
-  "name": "LaundroMaster",
-  "short_name": "LaundroMaster",
-  "description": "Book laundry pickup and delivery from nearby laundromats.",
+  "name": "LaundroMaster Admin",
+  "short_name": "LM Admin",
+  "description": "Administer laundromats, users, payouts, and settings.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

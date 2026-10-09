@@ -3,6 +3,7 @@ import { toast, badge } from '../../../shared/js/ui.js';
 import { statusLabel, currency, escapeHtml, formatDateOnly } from '../../../shared/js/format.js';
 import { mountCustomerHeader, requireCustomer } from '../../../shared/js/chrome.js';
 import { logout, portalUrl } from '../../../shared/js/auth-client.js';
+import { publicUrl } from '../../../shared/js/uploads.js';
 
 mountCustomerHeader('profile');
 
@@ -20,10 +21,32 @@ async function load() {
     document.getElementById('phone').value = user.phone || '';
     document.getElementById('accountEmail').textContent = user.email || '';
     document.getElementById('roleLabel').textContent = statusLabel(data.role);
+    if (user.avatar_path) document.getElementById('avatarPreview').src = publicUrl('avatars', user.avatar_path);
   } catch (err) {
     msg.textContent = err.message || 'Failed to load profile.';
     msg.className = 'form-msg is-error';
   }
+}
+
+const avatarBtn = document.getElementById('avatarBtn');
+if (avatarBtn) {
+  avatarBtn.addEventListener('click', () => document.getElementById('avatarInput').click());
+  document.getElementById('avatarInput').addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    const img = document.getElementById('avatarPreview');
+    try {
+      img.src = URL.createObjectURL(file);
+      const { uploadImage, publicUrl } = await import('../../../shared/js/uploads.js');
+      const path = await uploadImage(file, { bucket: 'avatars', prefix: 'avatars' });
+      await api.post('/auth?action=update-profile', { avatar_path: path });
+      img.src = publicUrl('avatars', path);
+      toast('Photo updated', 'success');
+    } catch (err) {
+      toast(err.message || 'Upload failed', 'danger');
+    }
+  });
 }
 
 form.addEventListener('submit', async (e) => {

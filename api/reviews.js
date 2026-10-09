@@ -22,7 +22,7 @@ export default createHandler(async function handler(req, res) {
     if (!q.laundromat_id) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing laundromat_id')));
     const { data, error } = await supa
       .from('reviews')
-      .select('id, rating, review_text, created_at, profiles!reviews_customer_id_fkey(full_name)')
+      .select('id, rating, review_text, photos, created_at, profiles!reviews_customer_id_fkey(full_name)')
       .eq('laundromat_id', q.laundromat_id)
       .eq('moderation_status', 'published')
       .order('created_at', { ascending: false })

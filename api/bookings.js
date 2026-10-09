@@ -9,9 +9,28 @@ import {
   ownerCommissionPercent, isCustomerSubscriber, computeDeliveryFee,
   computeCharges, recordCompletionLedger, reverseCompletionLedger,
 } from './_lib/pricing.js';
+import { notifyUser } from './_lib/push.js';
 
 const CANCELLABLE = ['pending_payment', 'pending_acceptance'];
 const REFUNDABLE = ['completed', 'cancelled', 'rejected', 'payment_failed'];
+
+const STATUS_LABEL = {
+  pending_payment: 'Awaiting payment',
+  pending_acceptance: 'Placed',
+  accepted: 'Accepted',
+  pickup_scheduled: 'Pickup scheduled',
+  collected: 'Collected',
+  washing: 'Washing',
+  drying: 'Drying',
+  ironing: 'Ironing',
+  ready: 'Ready',
+  out_for_delivery: 'Out for delivery',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+  rejected: 'Rejected',
+  payment_failed: 'Payment failed',
+  refund_pending: 'Refund requested',
+};
 
 async function ownedLaundromatIds(supa, userId) {
   const { data } = await supa.from('laundromats').select('id').eq('owner_id', userId);
@@ -161,6 +180,12 @@ export default createHandler(async function handler(req, res) {
       await supa.from('booking_status_history').insert({ booking_id: booking.id, status: 'pending_payment', actor_id: ctx.user.id });
 
       const full = await loadBooking(supa, booking.id);
+      await notifyUser(supa, biz.owner_id, {
+        type: 'booking_new',
+        title: 'New booking received',
+        body: `A new order with ${items.length} item(s) is waiting for your review.`,
+        url: 'apps/owner/pages/bookings.html',
+      });
       return res.status(201).json(successEnvelope(full));
     }
 
@@ -188,6 +213,12 @@ export default createHandler(async function handler(req, res) {
       } else if (status === 'cancelled' || status === 'rejected') {
         await reverseCompletionLedger(supa, booking_id, 'booking_reversal');
       }
+      await notifyUser(supa, existing.customer_id, {
+        type: `booking_${status}`,
+        title: `Order ${STATUS_LABEL[status] || status}`,
+        body: `Your order with ${existing.laundromats ? existing.laundromats.name : 'the laundromat'} is now "${STATUS_LABEL[status] || status}".${reason ? ` Note: ${reason}` : ''}`,
+        url: 'apps/customer/pages/orders.html',
+      });
       return res.status(200).json(successEnvelope(data));
     }
 
@@ -210,6 +241,14 @@ export default createHandler(async function handler(req, res) {
       if (error) return res.status(400).json(errorEnvelope(error));
       await supa.from('booking_status_history').insert({ booking_id: bookingId, status: 'cancelled', actor_id: ctx.user.id });
       await reverseCompletionLedger(supa, bookingId, 'booking_reversal');
+      if (existing.laundromats && existing.laundromats.owner_id) {
+        await notifyUser(supa, existing.laundromats.owner_id, {
+          type: 'booking_cancelled',
+          title: 'Order cancelled',
+          body: 'A customer cancelled their order.',
+          url: 'apps/owner/pages/bookings.html',
+        });
+      }
       return res.status(200).json(successEnvelope(data));
     }
 
@@ -237,6 +276,14 @@ export default createHandler(async function handler(req, res) {
       if (error) return res.status(400).json(errorEnvelope(error));
       await supa.from('bookings').update({ status: 'refund_pending', updated_at: new Date().toISOString() }).eq('id', bookingId);
       await supa.from('booking_status_history').insert({ booking_id: bookingId, status: 'refund_pending', actor_id: ctx.user.id, reason });
+      if (existing.laundromats && existing.laundromats.owner_id) {
+        await notifyUser(supa, existing.laundromats.owner_id, {
+          type: 'refund_requested',
+          title: 'Refund requested',
+          body: `A customer requested a refund.${reason ? ` Reason: ${reason}` : ''}`,
+          url: 'apps/owner/pages/bookings.html',
+        });
+      }
       return res.status(201).json(successEnvelope(refund));
     }
 

@@ -1,8 +1,7 @@
 import { api } from '../../../shared/js/api-client.js';
-import { toast, emptyState } from '../../../shared/js/ui.js';
-import { escapeHtml, statusLabel, statusTone } from '../../../shared/js/format.js';
+import { toast } from '../../../shared/js/ui.js';
 import { mountDashboard } from '../../../shared/js/shell.js';
-import { badge } from '../../../shared/js/ui.js';
+import { mountBranding } from '../../../shared/js/branding.js';
 
 (async function () {
   const user = await mountDashboard({ allowed: ['owner', 'staff', 'admin', 'super_admin'] });
@@ -23,17 +22,10 @@ import { badge } from '../../../shared/js/ui.js';
   }
 
   try {
-    const { data: laundromats } = await api.get('/owner?action=laundromats');
-    if (!laundromats.length) emptyState(bizList, 'No laundromat linked yet.');
-    else {
-      bizList.innerHTML = laundromats.map((l) => `<div style="margin-bottom:var(--space-3)">
-        <p class="card-title">${escapeHtml(l.name)}</p>
-        <p class="text-sm text-muted">${escapeHtml(l.address || 'No address')}</p>
-        ${badge(statusLabel(l.verification_status), statusTone(l.verification_status))}
-      </div>`).join('');
-    }
+    const { data: laundromats } = await api.get('/owner?action=branding');
+    mountBranding(bizList, laundromats);
   } catch (err) {
-    emptyState(bizList, 'Could not load laundromats.');
+    bizList.innerHTML = '<p class="text-muted text-sm">Could not load laundromats.</p>';
   }
 
   form.addEventListener('submit', async (e) => {

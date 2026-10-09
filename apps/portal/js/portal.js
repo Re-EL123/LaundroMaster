@@ -1,4 +1,16 @@
 import { login, register, me, homeForRole, getSession } from '../../../shared/js/auth-client.js';
+import { register as registerServiceWorker, wireInstallButton } from '../../../shared/js/pwa.js';
+
+registerServiceWorker();
+
+const installBtn = document.createElement('button');
+installBtn.type = 'button';
+installBtn.className = 'btn btn-secondary';
+installBtn.hidden = true;
+installBtn.textContent = 'Install app';
+(document.querySelector('.portal-foot') || document.body).appendChild(installBtn);
+wireInstallButton(installBtn);
+
 
 const tabLogin = document.getElementById('tabLogin');
 const tabRegister = document.getElementById('tabRegister');

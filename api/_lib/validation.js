@@ -32,6 +32,7 @@ export const serviceCreate = z.object({
   category_id: uuid.optional().nullable(),
   name: z.string().min(2).max(120),
   description: z.string().max(1000).optional().nullable(),
+  image_path: z.string().max(500).optional().nullable(),
   base_price: z.number().nonnegative(),
   turnaround_hours: z.number().int().nonnegative().optional().default(24),
   is_active: z.boolean().optional().default(true),
@@ -41,6 +42,7 @@ export const serviceUpdate = z.object({
   id: uuid,
   name: z.string().min(2).max(120).optional(),
   description: z.string().max(1000).optional().nullable(),
+  image_path: z.string().max(500).optional().nullable(),
   base_price: z.number().nonnegative().optional(),
   turnaround_hours: z.number().int().nonnegative().optional(),
   is_active: z.boolean().optional(),
@@ -51,6 +53,25 @@ export const reviewCreate = z.object({
   booking_id: uuid.optional().nullable(),
   rating: z.number().int().min(1).max(5),
   review_text: z.string().max(1000).optional().nullable(),
+  photos: z.array(z.string().max(500)).max(6).optional().default([]),
+});
+
+export const pushSubscribe = z.object({
+  endpoint: z.string().url().max(1000),
+  keys: z.object({
+    p256dh: z.string().min(10).max(500),
+    auth: z.string().min(4).max(200),
+  }),
+});
+
+export const ownerLaundromatUpdate = z.object({
+  laundromat_id: uuid,
+  name: z.string().min(2).max(160).optional(),
+  description: z.string().max(2000).optional().nullable(),
+  address: z.string().max(300).optional().nullable(),
+  phone: z.string().max(30).optional().nullable(),
+  logo_path: z.string().max(500).optional().nullable(),
+  photos: z.array(z.string().max(500)).max(12).optional(),
 });
 
 export const profileUpdate = z.object({
