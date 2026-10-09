@@ -13,16 +13,35 @@ IKHOKHA_API_KEY=
 IKHOKHA_API_SECRET=
 IKHOKHA_WEBHOOK_SECRET=
 EMAIL_PROVIDER_API_KEY=
-APP_BASE_URL=
-OWNER_APP_URL=
-ADMIN_APP_URL=
-ALLOWED_ORIGINS=https://re-el123.github.io,http://localhost:3000
+APP_BASE_URL=https://laundromaster.re-el.co.za
+OWNER_APP_URL=https://laundromaster.re-el.co.za/apps/owner
+ADMIN_APP_URL=https://laundromaster.re-el.co.za/apps/admin
+ALLOWED_ORIGINS=https://laundromaster.re-el.co.za,https://re-el123.github.io,http://localhost:3000
 ```
+
+## Custom domain (laundromaster.re-el.co.za)
+Frontend stays on GitHub Pages; only a DNS `CNAME` record is required:
+```
+CNAME  laundromaster  ->  re-el123.github.io
+```
+`dist/CNAME` is written by the Pages workflow and the domain is set on the
+Pages site (HTTPS enforced). The API is unchanged (`laundromaster-sable.vercel.app`).
 
 ## Frontend (GitHub Pages)
 Push to `main` runs `.github/workflows/deploy-gh-pages.yml`, which publishes
-`apps/` and `shared/`. Each app reads its API base from `js/config.js`
-(`window.API_BASE`).
+`apps/` and `shared/`, writes `dist/CNAME`, and adds a root `index.html` that
+redirects to `apps/portal/index.html`. Each app reads its API base from
+`js/config.js` (`window.API_BASE`).
+
+## Authentication & roles
+- `POST /api/auth?action=register|login|logout|refresh`, `GET /api/auth?action=me`.
+- Roles: `customer`, `owner`, `staff`, `admin`, `super_admin`
+  (`ROLE_PRIORITY` in `api/auth.js`); self-registration is limited to `customer`
+  and `owner`, admin accounts are provisioned internally.
+- `supabase/migrations/0002_auth_roles.sql` adds the `handle_new_user()` trigger
+  and `current_user_role()` helper.
+- Browser flow: `shared/js/auth-client.js` (session + refresh),
+  `shared/js/guard.js` (route guard), `shared/js/session.js` (sign-out UI).
 
 ## Backend (Vercel)
 1. Import the repo into Vercel (framework: Other).
