@@ -4,15 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Discover - LaundroMaster</title>
-  <link rel="stylesheet" href="../../../shared/css/tokens.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/reset.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/layout.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/buttons.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/cards.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/forms.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/utilities.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/motion.css?v=4">
-  <link rel="stylesheet" href="../css/customer.css?v=4">
+  <link rel="stylesheet" href="../../../shared/css/tokens.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/reset.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/layout.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/buttons.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/cards.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/forms.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/utilities.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/motion.css?v=5">
+  <link rel="stylesheet" href="../css/customer.css?v=5">
 </head>
 <body>
   <header class="app-header" id="appHeader"></header>
@@ -23,12 +23,30 @@
         <label class="label" for="q">Search</label>
         <input class="input" id="q" name="q" type="search" placeholder="Suburb, name or service">
       </div>
+      <div class="field">
+        <label class="label" for="min_rating">Min rating</label>
+        <select class="select" id="min_rating">
+          <option value="">Any</option>
+          <option value="4">4★ &amp; up</option>
+          <option value="3">3★ &amp; up</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="label" for="max_price">Max price</label>
+        <input class="input" id="max_price" type="number" min="0" step="10" placeholder="e.g. 80">
+      </div>
       <button class="btn btn-primary" type="submit">Search</button>
       <button class="btn btn-secondary" type="button" id="nearBtn">Near me</button>
     </form>
-    <div class="card-grid" id="list"></div>
+    <div class="filter-bar" id="sortBar" role="group" aria-label="Sort results">
+      <button class="chip is-active" data-sort="featured" type="button">Recommended</button>
+      <button class="chip" data-sort="rating" type="button">Top rated</button>
+      <button class="chip" data-sort="newest" type="button">Newest</button>
+      <span class="text-sm text-muted" id="resultCount" style="margin-left:auto"></span>
+    </div>
+    <div class="card-grid mt-4" id="list"></div>
   </main>
-  <script src="../js/config.js?v=4"></script>
-  <script type="module" src="../js/discover.js?v=4"></script>
+  <script src="../js/config.js?v=5"></script>
+  <script type="module" src="../js/discover.js?v=5"></script>
 </body>
 </html>

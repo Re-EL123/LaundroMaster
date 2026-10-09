@@ -4,15 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Audit - LaundroMaster</title>
-  <link rel="stylesheet" href="../../../shared/css/tokens.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/reset.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/layout.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/buttons.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/cards.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/forms.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/utilities.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/motion.css?v=4">
-  <link rel="stylesheet" href="../css/admin.css?v=4">
+  <link rel="stylesheet" href="../../../shared/css/tokens.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/reset.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/layout.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/buttons.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/cards.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/forms.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/utilities.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/motion.css?v=5">
+  <link rel="stylesheet" href="../css/admin.css?v=5">
 </head>
 <body>
   <aside class="sidebar">
@@ -35,12 +35,28 @@
     <header class="topbar page-shell flex justify-between">
       <h1>Audit log</h1>
       <div id="sessionMount" class="session-control"></div>
+      <div id="notifMount" class="session-control"></div>
     </header>
     <div class="page-shell content">
+      <form id="filters" class="flex" style="gap:var(--space-2);flex-wrap:wrap;margin-bottom:var(--space-4)">
+        <input class="input" id="f_q" placeholder="Search action" style="max-width:16rem">
+        <input class="input" id="f_actor" placeholder="Actor user id" style="max-width:16rem">
+        <select class="input" id="f_target" style="max-width:12rem">
+          <option value="">All targets</option>
+          <option value="laundromat">Laundromat</option>
+          <option value="user">User</option>
+          <option value="payout">Payout</option>
+          <option value="refund">Refund</option>
+          <option value="promotion">Promotion</option>
+          <option value="platform">Platform</option>
+        </select>
+        <button class="btn btn-primary" type="submit">Filter</button>
+        <button class="btn btn-secondary" type="button" id="clearFilters">Clear</button>
+      </form>
       <div id="list"></div>
     </div>
   </main>
-  <script src="../js/config.js?v=4"></script>
-  <script type="module" src="../js/audit.js?v=4"></script>
+  <script src="../js/config.js?v=5"></script>
+  <script type="module" src="../js/audit.js?v=5"></script>
 </body>
 </html>

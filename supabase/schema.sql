@@ -550,3 +550,15 @@ create policy payouts_owner on payouts for select using (auth.uid() = owner_id);
 
 insert into platform_settings (key, value) values ('schema_business', '3'::jsonb)
 on conflict (key) do update set value = '3'::jsonb;
+
+-- ============================================================
+-- 0004_ux.sql — listing views + promotion performance metrics
+-- ============================================================
+alter table laundromats add column if not exists view_count integer not null default 0;
+alter table promotions add column if not exists impressions integer not null default 0;
+alter table promotions add column if not exists clicks integer not null default 0;
+
+create index if not exists idx_laundromats_view_count on laundromats(view_count desc);
+
+insert into platform_settings (key, value) values ('schema_ux', '4'::jsonb)
+on conflict (key) do update set value = '4'::jsonb;

@@ -11,6 +11,30 @@ import { mountDashboard } from '../../../shared/js/shell.js';
   const select = document.getElementById('laundromat_id');
   const form = document.getElementById('serviceForm');
   const msg = document.getElementById('msg');
+  const netCalc = document.getElementById('netCalc');
+  const priceInput = document.getElementById('base_price');
+  let commissionPercent = 8;
+
+  function updateNetCalc() {
+    if (!netCalc) return;
+    const price = Number(priceInput.value) || 0;
+    const commission = Math.round(price * (commissionPercent / 100) * 100) / 100;
+    const net = Math.round((price - commission) * 100) / 100;
+    netCalc.textContent = price > 0
+      ? `Customer pays ${currency(price)} · commission ${currency(commission)} (${commissionPercent}%) · you keep ${currency(net)}`
+      : `Commission is ${commissionPercent}% of each service price.`;
+  }
+
+  async function loadPlan() {
+    try {
+      const { data } = await api.get('/owner?action=plan');
+      const plan = data.subscription ? data.subscription.plans : data.plan;
+      if (plan && plan.commission_percent != null) commissionPercent = Number(plan.commission_percent);
+    } catch { /* keep default */ }
+    updateNetCalc();
+  }
+
+  priceInput.addEventListener('input', updateNetCalc);
 
   async function loadLaundromats() {
     try {
@@ -95,5 +119,6 @@ import { mountDashboard } from '../../../shared/js/shell.js';
   });
 
   loadLaundromats();
+  loadPlan();
   load();
 })();

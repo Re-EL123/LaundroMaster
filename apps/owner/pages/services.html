@@ -4,15 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Owner Services - LaundroMaster</title>
-  <link rel="stylesheet" href="../../../shared/css/tokens.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/reset.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/layout.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/buttons.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/cards.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/forms.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/utilities.css?v=4">
-  <link rel="stylesheet" href="../../../shared/css/motion.css?v=4">
-  <link rel="stylesheet" href="../css/owner.css?v=4">
+  <link rel="stylesheet" href="../../../shared/css/tokens.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/reset.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/layout.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/buttons.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/cards.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/forms.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/utilities.css?v=5">
+  <link rel="stylesheet" href="../../../shared/css/motion.css?v=5">
+  <link rel="stylesheet" href="../css/owner.css?v=5">
 </head>
 <body>
   <aside class="sidebar">
@@ -31,7 +31,7 @@
   <main class="main">
     <header class="topbar page-shell flex justify-between">
       <h1>Services</h1>
-      <div id="sessionMount" class="session-control"></div>
+      <div class="flex"><div id="notifMount"></div><div id="sessionMount" class="session-control"></div></div>
     </header>
     <div class="page-shell content">
       <div class="layout-split grid">
@@ -58,6 +58,7 @@
               <div class="field">
                 <label class="label" for="base_price">Price (ZAR)</label>
                 <input class="input" id="base_price" name="base_price" type="number" min="0" step="0.01" required>
+                <p class="help" id="netCalc">You keep 100% of each order after commission.</p>
               </div>
               <div class="field">
                 <label class="label" for="turnaround_hours">Turnaround (hours)</label>
@@ -71,7 +72,7 @@
       </div>
     </div>
   </main>
-  <script src="../js/config.js?v=4"></script>
-  <script type="module" src="../js/services.js?v=4"></script>
+  <script src="../js/config.js?v=5"></script>
+  <script type="module" src="../js/services.js?v=5"></script>
 </body>
 </html>

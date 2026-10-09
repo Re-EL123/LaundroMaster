@@ -11,6 +11,7 @@ import {
 } from './_lib/pricing.js';
 
 const CANCELLABLE = ['pending_payment', 'pending_acceptance'];
+const REFUNDABLE = ['completed', 'cancelled', 'rejected', 'payment_failed'];
 
 async function ownedLaundromatIds(supa, userId) {
   const { data } = await supa.from('laundromats').select('id').eq('owner_id', userId);
@@ -42,12 +43,21 @@ export default createHandler(async function handler(req, res) {
         || booking.customer_id === ctx.user.id
         || (booking.laundromats && booking.laundromats.owner_id === ctx.user.id);
       if (!permitted) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'You do not have access to this booking', 403)));
-      return res.status(200).json(successEnvelope(booking));
+      const [{ data: payment }, { data: history }] = await Promise.all([
+        supa.from('payments').select('*').eq('booking_id', booking.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supa.from('booking_status_history').select('*').eq('booking_id', booking.id).order('created_at', { ascending: true }),
+      ]);
+      let refund = null;
+      if (payment) {
+        const { data } = await supa.from('refunds').select('*').eq('payment_id', payment.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+        refund = data || null;
+      }
+      return res.status(200).json(successEnvelope({ ...booking, payment: payment || null, refund, history: history || [] }));
     }
 
     let request = supa
       .from('bookings')
-      .select('*, laundromats(id, name, address), booking_items(*)')
+      .select('*, laundromats(id, name, address), booking_items(*), customer:profiles!bookings_customer_id_fkey(full_name, phone)')
       .order('created_at', { ascending: false })
       .limit(Math.min(Number(q.limit) || 50, 100));
 
@@ -201,6 +211,33 @@ export default createHandler(async function handler(req, res) {
       await supa.from('booking_status_history').insert({ booking_id: bookingId, status: 'cancelled', actor_id: ctx.user.id });
       await reverseCompletionLedger(supa, bookingId, 'booking_reversal');
       return res.status(200).json(successEnvelope(data));
+    }
+
+    if (action === 'request-refund') {
+      const ctx = await requireUser(req);
+      const bookingId = (body(req).booking_id) || q.id;
+      const reason = (body(req).reason || '').slice(0, 500) || null;
+      if (!bookingId) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing booking_id')));
+      const existing = await loadBooking(supa, bookingId);
+      if (existing.customer_id !== ctx.user.id && !isAdmin(ctx)) {
+        return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your booking', 403)));
+      }
+      if (!['completed', 'cancelled', 'rejected', 'payment_failed', 'refund_pending'].includes(existing.status)) {
+        return res.status(400).json(errorEnvelope(new ApiError('INVALID_STATE', 'This booking is not eligible for a refund')));
+      }
+      const { data: payment } = await supa.from('payments').select('*').eq('booking_id', bookingId).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (!payment) return res.status(400).json(errorEnvelope(new ApiError('NO_PAYMENT', 'No payment was found for this booking')));
+      const { data: dup } = await supa.from('refunds').select('id, status').eq('payment_id', payment.id).in('status', ['pending', 'approved']).maybeSingle();
+      if (dup) return res.status(409).json(errorEnvelope(new ApiError('REFUND_EXISTS', 'A refund for this booking is already in progress')));
+      const { data: refund, error } = await supa.from('refunds').insert({
+        payment_id: payment.id,
+        amount: Number(payment.amount) || 0,
+        status: 'pending',
+      }).select().single();
+      if (error) return res.status(400).json(errorEnvelope(error));
+      await supa.from('bookings').update({ status: 'refund_pending', updated_at: new Date().toISOString() }).eq('id', bookingId);
+      await supa.from('booking_status_history').insert({ booking_id: bookingId, status: 'refund_pending', actor_id: ctx.user.id, reason });
+      return res.status(201).json(successEnvelope(refund));
     }
 
     return res.status(405).json(errorEnvelope(new ApiError('METHOD_NOT_ALLOWED', 'Method not allowed', 405)));

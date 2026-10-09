@@ -57,7 +57,10 @@ export default createHandler(async function handler(req, res) {
 
       const { data: po } = await supa.from('payouts').select('amount, status').in('status', ['requested', 'processing']);
       const payoutsPending = round2((po || []).reduce((s, p) => s + num(p.amount, 0), 0));
+      const { count: payoutsPendingCount } = await supa.from('payouts').select('*', { count: 'exact', head: true }).in('status', ['requested', 'processing']);
       const { count: promotionsActive } = await supa.from('promotions').select('*', { count: 'exact', head: true }).eq('status', 'active');
+      const { count: refundsPending } = await supa.from('refunds').select('*', { count: 'exact', head: true }).in('status', ['pending', 'approved']);
+      const { count: commissionsPending } = await supa.from('commissions').select('*', { count: 'exact', head: true }).eq('status', 'pending');
 
       return res.status(200).json(successEnvelope({
         pending: pending || 0,
@@ -69,7 +72,10 @@ export default createHandler(async function handler(req, res) {
         active_subscriptions: activeSubscriptions,
         mrr,
         payouts_pending: payoutsPending,
+        payouts_pending_count: payoutsPendingCount || 0,
         promotions_active: promotionsActive || 0,
+        refunds_pending: refundsPending || 0,
+        commissions_pending: commissionsPending || 0,
       }));
     }
 
@@ -98,6 +104,19 @@ export default createHandler(async function handler(req, res) {
       const { data, error } = await request;
       if (error) return res.status(500).json(errorEnvelope(error));
       return res.status(200).json(successEnvelope(data || []));
+    }
+
+    if (action === 'verification-detail') {
+      const id = q.id;
+      if (!id) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing id')));
+      const [{ data: biz }, { data: docs }, { data: services }] = await Promise.all([
+        supa.from('laundromats').select('*, profiles!laundromats_owner_id_fkey(id, full_name, email, phone)').eq('id', id).maybeSingle(),
+        supa.from('documents').select('*').eq('laundromat_id', id).order('created_at', { ascending: false }),
+        supa.from('services').select('id, name, base_price, is_active').eq('laundromat_id', id),
+      ]);
+      if (!biz) return res.status(404).json(errorEnvelope(new ApiError('NOT_FOUND', 'Laundromat not found', 404)));
+      const { data: history } = await supa.from('admin_logs').select('*').eq('target_id', id).order('created_at', { ascending: false }).limit(20);
+      return res.status(200).json(successEnvelope({ laundromat: biz, documents: docs || [], services: services || [], history: history || [] }));
     }
 
     if (action === 'users') {
@@ -139,7 +158,11 @@ export default createHandler(async function handler(req, res) {
     }
 
     if (action === 'audit') {
-      const { data, error } = await supa.from('admin_logs').select('*').order('created_at', { ascending: false }).limit(200);
+      let request = supa.from('admin_logs').select('*').order('created_at', { ascending: false }).limit(Math.min(Number(q.limit) || 200, 500));
+      if (q.target_type) request = request.eq('target_type', q.target_type);
+      if (q.actor) request = request.eq('actor_id', q.actor);
+      if (q.q) request = request.ilike('action', `%${q.q}%`);
+      const { data, error } = await request;
       if (error) return res.status(500).json(errorEnvelope(error));
       return res.status(200).json(successEnvelope(data || []));
     }
@@ -268,6 +291,15 @@ export default createHandler(async function handler(req, res) {
       return res.status(200).json(successEnvelope(data));
     }
 
+    if (action === 'commission-settle-all') {
+      const { data, error } = await supa.from('commissions')
+        .update({ status: 'settled', settled_at: new Date().toISOString() })
+        .eq('status', 'pending').select();
+      if (error) return res.status(400).json(errorEnvelope(error));
+      await logAdmin(supa, ctx, 'commission.settle_all', 'commission', null, { count: (data || []).length });
+      return res.status(200).json(successEnvelope({ settled: (data || []).length }));
+    }
+
     if (action === 'commission-update') {
       const parsed = adminCommissionUpdate.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
@@ -288,12 +320,16 @@ export default createHandler(async function handler(req, res) {
       if (audience === 'user') {
         if (!user_id) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'user_id is required for a single user')));
         recipients = [user_id];
+      } else if (audience === 'owners' || audience === 'customers') {
+        const role = audience === 'owners' ? 'owner' : 'customer';
+        const { data } = await supa.from('user_roles').select('user_id').eq('role', role).limit(5000);
+        recipients = [...new Set((data || []).map((r) => r.user_id))];
       } else {
         const { data } = await supa.from('profiles').select('id').limit(5000);
         recipients = (data || []).map((r) => r.id);
       }
       if (recipients.length) {
-        await supa.from('notifications').insert(recipients.map((uid) => ({ user_id: uid, title, message, type: 'admin' })));
+        await supa.from('notifications').insert(recipients.map((uid) => ({ user_id: uid, title, body: message, type: 'admin' })));
       }
       await logAdmin(supa, ctx, 'notification.broadcast', 'platform', null, { audience, count: recipients.length });
       return res.status(200).json(successEnvelope({ sent: recipients.length }));

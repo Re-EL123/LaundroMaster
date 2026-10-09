@@ -4,15 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Owner Dashboard - LaundroMaster</title>
-  <link rel="stylesheet" href="../../shared/css/tokens.css?v=4">
-  <link rel="stylesheet" href="../../shared/css/reset.css?v=4">
-  <link rel="stylesheet" href="../../shared/css/layout.css?v=4">
-  <link rel="stylesheet" href="../../shared/css/buttons.css?v=4">
-  <link rel="stylesheet" href="../../shared/css/cards.css?v=4">
-  <link rel="stylesheet" href="../../shared/css/forms.css?v=4">
-  <link rel="stylesheet" href="../../shared/css/utilities.css?v=4">
-  <link rel="stylesheet" href="../../shared/css/motion.css?v=4">
-  <link rel="stylesheet" href="./css/owner.css?v=4">
+  <link rel="stylesheet" href="../../shared/css/tokens.css?v=5">
+  <link rel="stylesheet" href="../../shared/css/reset.css?v=5">
+  <link rel="stylesheet" href="../../shared/css/layout.css?v=5">
+  <link rel="stylesheet" href="../../shared/css/buttons.css?v=5">
+  <link rel="stylesheet" href="../../shared/css/cards.css?v=5">
+  <link rel="stylesheet" href="../../shared/css/forms.css?v=5">
+  <link rel="stylesheet" href="../../shared/css/utilities.css?v=5">
+  <link rel="stylesheet" href="../../shared/css/motion.css?v=5">
+  <link rel="stylesheet" href="./css/owner.css?v=5">
 </head>
 <body>
   <aside class="sidebar">
@@ -31,20 +31,32 @@
   <main class="main">
     <header class="topbar page-shell flex justify-between">
       <h1>Dashboard</h1>
-      <div id="sessionMount" class="session-control"></div>
+      <div class="flex"><div id="notifMount"></div><div id="sessionMount" class="session-control"></div></div>
     </header>
     <div class="page-shell content">
-      <div class="card-grid" id="stats">
+      <div id="banner"></div>
+      <div class="metric-grid" id="stats">
         <article class="card"><div class="card-body"><h2 class="text-sm text-muted">Pending</h2><p class="stat-value">—</p></div></article>
         <article class="card"><div class="card-body"><h2 class="text-sm text-muted">Active</h2><p class="stat-value">—</p></div></article>
         <article class="card"><div class="card-body"><h2 class="text-sm text-muted">Completed</h2><p class="stat-value">—</p></div></article>
-        <article class="card"><div class="card-body"><h2 class="text-sm text-muted">Revenue</h2><p class="stat-value">—</p></div></article>
+        <article class="card"><div class="card-body"><h2 class="text-sm text-muted">Net earnings</h2><p class="stat-value">—</p></div></article>
+      </div>
+      <div class="layout-split grid mt-6">
+        <section>
+          <div class="section-head"><h2>Earnings trend</h2><span class="text-sm text-muted">Your net · last 6 months</span></div>
+          <div class="card"><div class="card-body" id="chart"><p class="text-muted">Loading…</p></div></div>
+          <div class="section-head mt-6"><h2>Top services</h2></div>
+          <div id="topServices"></div>
+        </section>
+        <aside class="card">
+          <div class="card-body" id="checklist"><p class="text-muted">Loading…</p></div>
+        </aside>
       </div>
       <div class="section-head mt-6"><h2>Recent bookings</h2><a class="text-sm" href="pages/bookings.html">View all</a></div>
       <div class="card-grid" id="recent"></div>
     </div>
   </main>
-  <script src="./js/config.js?v=4"></script>
-  <script type="module" src="./js/dashboard.js?v=4"></script>
+  <script src="./js/config.js?v=5"></script>
+  <script type="module" src="./js/dashboard.js?v=5"></script>
 </body>
 </html>

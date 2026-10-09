@@ -1,5 +1,6 @@
 import { guard } from './guard.js';
 import { mountSignOut } from './session.js';
+import { mountNotifications } from './notifications-ui.js';
 
 export async function mountDashboard({ allowed, sidebarSelector = '.side-nav' } = {}) {
   const user = await guard(allowed || []);
@@ -16,5 +17,6 @@ export async function mountDashboard({ allowed, sidebarSelector = '.side-nav' } 
 
   const slot = document.getElementById('sessionMount');
   if (slot) mountSignOut(slot);
+  mountNotifications(document.getElementById('notifMount'));
   return user;
 }

@@ -10,6 +10,16 @@ const ROLES = ['customer', 'owner', 'staff', 'admin', 'super_admin'];
   if (!user) return;
 
   const list = document.getElementById('list');
+  let cache = [];
+
+  function superAdminCount() {
+    return cache.filter((u) => (u.user_roles || []).some((r) => r.role === 'super_admin')).length;
+  }
+
+  function currentRoles(id) {
+    const u = cache.find((x) => x.id === id);
+    return new Set((u && u.user_roles ? u.user_roles : []).map((r) => r.role));
+  }
 
   function render(u) {
     const roles = new Set((u.user_roles || []).map((r) => r.role));
@@ -38,6 +48,7 @@ const ROLES = ['customer', 'owner', 'staff', 'admin', 'super_admin'];
     skeleton(list, 3, 90);
     try {
       const { data: users } = await api.get('/admin?action=users');
+      cache = users;
       if (!users.length) return emptyState(list, 'No users found.');
       list.innerHTML = users.map(render).join('');
     } catch (err) {
@@ -52,8 +63,13 @@ const ROLES = ['customer', 'owner', 'staff', 'admin', 'super_admin'];
 
     if (e.target.closest('[data-save]')) {
       const btn = e.target.closest('[data-save]');
-      btn.disabled = true;
       const roles = Array.from(card.querySelectorAll('input[data-role]:checked')).map((i) => i.dataset.role);
+      if (!roles.length) return toast('At least one role is required', 'danger');
+      const hadSuper = currentRoles(id).has('super_admin');
+      if (hadSuper && !roles.includes('super_admin') && superAdminCount() <= 1) {
+        return toast('Cannot remove the last super admin', 'danger');
+      }
+      btn.disabled = true;
       try {
         await api.post('/admin?action=user-roles', { user_id: id, roles });
         toast('Roles updated', 'success');
@@ -66,6 +82,9 @@ const ROLES = ['customer', 'owner', 'staff', 'admin', 'super_admin'];
 
     const suspend = e.target.closest('[data-suspend]');
     if (suspend) {
+      if (suspend.dataset.suspend === 'suspended' && currentRoles(id).has('super_admin') && superAdminCount() <= 1) {
+        return toast('Cannot suspend the last super admin', 'danger');
+      }
       suspend.disabled = true;
       try {
         await api.post('/admin?action=user-update', { user_id: id, account_status: suspend.dataset.suspend });

@@ -1,5 +1,6 @@
 import { getSession, logout, portalUrl, appUrl } from './auth-client.js';
 import { escapeHtml } from './format.js';
+import { mountNotifications } from './notifications-ui.js';
 
 function customerPaths() {
   const inPages = /\/pages\//.test(location.pathname);
@@ -29,9 +30,12 @@ export function mountCustomerHeader(active = '') {
         ${link('Discover', p.discover, 'discover')}
         ${link('Orders', p.orders, 'orders')}
         ${link('Favorites', p.favorites, 'favorites')}
+        <span id="notifSlot"></span>
         <span id="authSlot"></span>
       </nav>
     </div>`;
+
+  if (user) mountNotifications(document.getElementById('notifSlot'));
 
   const slot = host.querySelector('#authSlot');
   if (user) {

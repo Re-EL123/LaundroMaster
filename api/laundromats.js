@@ -46,19 +46,29 @@ export default createHandler(async function handler(req, res) {
       const ctx = await getUser(req);
       const visible = data.verification_status === 'approved' || isAdmin(ctx) || (ctx.user && data.owner_id === ctx.user.id);
       if (!visible) return res.status(404).json(errorEnvelope(new ApiError('NOT_FOUND', 'Laundromat not found', 404)));
+      try {
+        await supa.from('laundromats').update({ view_count: (Number(data.view_count) || 0) + 1 }).eq('id', id);
+      } catch { /* view counting is best-effort */ }
       return res.status(200).json(successEnvelope(data));
     }
 
     const limit = Math.min(Number(q.limit) || 20, 100);
     const offset = Math.max(Number(q.offset) || 0, 0);
+    const maxPrice = q.max_price != null && q.max_price !== '' ? Number(q.max_price) : null;
+    const select = maxPrice != null ? '*, services!inner(base_price, is_active)' : '*';
     let request = supa
       .from('laundromats')
-      .select('*')
+      .select(select)
       .eq('verification_status', 'approved')
-      .order('is_featured', { ascending: false })
-      .order('rating_average', { ascending: false })
       .range(offset, offset + limit - 1);
     if (q.q) request = request.or(`name.ilike.%${q.q}%,address.ilike.%${q.q}%,description.ilike.%${q.q}%`);
+    if (q.min_rating) request = request.gte('rating_average', Number(q.min_rating));
+    if (maxPrice != null) request = request.lte('services.base_price', maxPrice).eq('services.is_active', true);
+    const sort = q.sort || 'featured';
+    if (sort === 'rating') request = request.order('rating_average', { ascending: false });
+    else if (sort === 'name') request = request.order('name', { ascending: true });
+    else if (sort === 'newest') request = request.order('created_at', { ascending: false });
+    else request = request.order('is_featured', { ascending: false }).order('rating_average', { ascending: false });
     const { data, error } = await request;
     if (error) return res.status(500).json(errorEnvelope(error));
     return res.status(200).json(successEnvelope(data || []));
@@ -79,6 +89,24 @@ export default createHandler(async function handler(req, res) {
       const { error } = await supa.from('favorites').insert({ user_id: ctx.user.id, laundromat_id });
       if (error) return res.status(400).json(errorEnvelope(error));
       return res.status(201).json(successEnvelope({ favorited: true }));
+    }
+
+    if (action === 'promotion-click') {
+      const laundromat_id = body(req).laundromat_id;
+      if (!laundromat_id) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing laundromat_id')));
+      const { data: promo } = await supa.from('promotions')
+        .select('id, clicks')
+        .eq('laundromat_id', laundromat_id)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (promo) {
+        try {
+          await supa.from('promotions').update({ clicks: (Number(promo.clicks) || 0) + 1 }).eq('id', promo.id);
+        } catch { /* ignore */ }
+      }
+      return res.status(200).json(successEnvelope({ ok: true }));
     }
     return res.status(405).json(errorEnvelope(new ApiError('METHOD_NOT_ALLOWED', 'Method not allowed', 405)));
   }

@@ -5,7 +5,7 @@ import { query, body } from './_lib/req.js';
 import { requireUser, isAdmin } from './_lib/auth.js';
 import { paymentCreate, subscribePlan, cancelSubscription } from './_lib/validation.js';
 import { getSettings, num } from './_lib/settings.js';
-import { activeSubscription } from './_lib/pricing.js';
+import { activeSubscription, round2 } from './_lib/pricing.js';
 
 async function listPlans(supa, audience) {
   let req = supa.from('plans').select('*').eq('is_active', true).order('audience', { ascending: true }).order('sort', { ascending: true });
@@ -33,6 +33,32 @@ export default createHandler(async function handler(req, res) {
       const audience = q.audience === 'owner' ? 'owner' : 'customer';
       const subscription = await activeSubscription(supa, ctx.user.id, audience);
       return res.status(200).json(successEnvelope({ subscription, plan: subscription ? subscription.plans : null }));
+    }
+
+    if (action === 'savings') {
+      const settings = await getSettings(supa);
+      const deliveryFee = num(settings.delivery_fee, 0);
+      const subscription = await activeSubscription(supa, ctx.user.id, 'customer');
+      if (!subscription) {
+        return res.status(200).json(successEnvelope({ active: false, orders: 0, saved: 0, delivery_fee: deliveryFee, member_since: null }));
+      }
+      const since = subscription.current_period_start || subscription.created_at || new Date().toISOString();
+      const { data: bookings } = await supa.from('bookings')
+        .select('id, status, delivery_required')
+        .eq('customer_id', ctx.user.id)
+        .gte('created_at', since)
+        .not('status', 'in', '(cancelled,rejected)');
+      const deliveredOrders = (bookings || []).filter((b) => b.delivery_required).length;
+      const saved = round2(deliveredOrders * deliveryFee);
+      return res.status(200).json(successEnvelope({
+        active: true,
+        orders: (bookings || []).length,
+        delivered_orders: deliveredOrders,
+        saved,
+        delivery_fee: deliveryFee,
+        member_since: since,
+        subscription,
+      }));
     }
 
     if (!q.booking_id && !q.id) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing booking_id or id')));

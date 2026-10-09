@@ -32,22 +32,98 @@ export default createHandler(async function handler(req, res) {
 
   if (req.method === 'GET') {
     if (action === 'stats') {
-      if (!ids.length) return res.status(200).json(successEnvelope({ laundromats: 0, pending: 0, active: 0, completed: 0, revenue: 0 }));
-      const { data: bookings } = await supa.from('bookings').select('status, total_amount, owner_net, commission_amount').in('laundromat_id', ids);
+      if (!ids.length) return res.status(200).json(successEnvelope({ laundromats: 0, pending: 0, active: 0, completed: 0, revenue: 0, net: 0, commission: 0, repeat_rate: 0, rating: 0, reviews: 0 }));
+      const { data: bookings } = await supa.from('bookings').select('status, total_amount, owner_net, commission_amount, customer_id').in('laundromat_id', ids);
       const rows = bookings || [];
       const count = (s) => rows.filter((b) => b.status === s).length;
-      const revenue = rows.filter((b) => b.status === 'completed').reduce((sum, b) => sum + (Number(b.total_amount) || 0), 0);
-      const net = rows.filter((b) => b.status === 'completed').reduce((sum, b) => sum + (Number(b.owner_net) || 0), 0);
-      const commission = rows.filter((b) => b.status === 'completed').reduce((sum, b) => sum + (Number(b.commission_amount) || 0), 0);
+      const completedRows = rows.filter((b) => b.status === 'completed');
+      const revenue = completedRows.reduce((sum, b) => sum + (Number(b.total_amount) || 0), 0);
+      const net = completedRows.reduce((sum, b) => sum + (Number(b.owner_net) || 0), 0);
+      const commission = completedRows.reduce((sum, b) => sum + (Number(b.commission_amount) || 0), 0);
+      const byCustomer = new Map();
+      completedRows.forEach((b) => byCustomer.set(b.customer_id, (byCustomer.get(b.customer_id) || 0) + 1));
+      const uniqueCustomers = byCustomer.size;
+      const repeatCustomers = [...byCustomer.values()].filter((n) => n > 1).length;
+      const repeatRate = uniqueCustomers ? Math.round((repeatCustomers / uniqueCustomers) * 100) : 0;
+      const { data: reviews } = await supa.from('reviews').select('rating').in('laundromat_id', ids);
+      const reviewRows = reviews || [];
+      const rating = reviewRows.length ? reviewRows.reduce((s, r) => s + (Number(r.rating) || 0), 0) / reviewRows.length : 0;
       return res.status(200).json(successEnvelope({
         laundromats: ids.length,
         pending: count('pending_acceptance') + count('pending_payment'),
-        active: rows.length - count('completed') - count('cancelled') - count('rejected'),
-        completed: count('completed'),
+        active: rows.length - count('completed') - count('cancelled') - count('rejected') - count('refund_pending'),
+        completed: completedRows.length,
         revenue,
         net,
         commission,
+        repeat_rate: repeatRate,
+        unique_customers: uniqueCustomers,
+        rating: round2(rating),
+        reviews: reviewRows.length,
       }));
+    }
+
+    if (action === 'analytics') {
+      if (!ids.length) return res.status(200).json(successEnvelope({ months: [], top_services: [] }));
+      const monthsBack = 6;
+      const since = new Date();
+      since.setMonth(since.getMonth() - (monthsBack - 1));
+      since.setDate(1);
+      since.setHours(0, 0, 0, 0);
+      const { data: bookings } = await supa.from('bookings')
+        .select('status, total_amount, owner_net, created_at, booking_items(service_name_snapshot, quantity, line_total)')
+        .in('laundromat_id', ids)
+        .gte('created_at', since.toISOString());
+      const rows = (bookings || []).filter((b) => b.status === 'completed');
+      const buckets = [];
+      const cursor = new Date(since);
+      for (let i = 0; i < monthsBack; i++) {
+        const key = `${cursor.getFullYear()}-${cursor.getMonth()}`;
+        buckets.push({ key, label: cursor.toLocaleString('en-ZA', { month: 'short' }), bookings: 0, revenue: 0 });
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+      const byKey = new Map(buckets.map((b) => [b.key, b]));
+      const serviceTotals = new Map();
+      rows.forEach((b) => {
+        const d = new Date(b.created_at);
+        const bucket = byKey.get(`${d.getFullYear()}-${d.getMonth()}`);
+        if (bucket) { bucket.bookings += 1; bucket.revenue += Number(b.owner_net) || 0; }
+        (b.booking_items || []).forEach((it) => {
+          const cur = serviceTotals.get(it.service_name_snapshot) || { name: it.service_name_snapshot, quantity: 0, revenue: 0 };
+          cur.quantity += it.quantity || 0;
+          cur.revenue += Number(it.line_total) || 0;
+          serviceTotals.set(it.service_name_snapshot, cur);
+        });
+      });
+      const topServices = [...serviceTotals.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+      return res.status(200).json(successEnvelope({ months: buckets, top_services: topServices }));
+    }
+
+    if (action === 'verification') {
+      if (!ids.length) return res.status(200).json(successEnvelope([]));
+      const [{ data: laundromats }, { data: services }, { data: hours }, { data: zones }] = await Promise.all([
+        supa.from('laundromats').select('id, name, verification_status, business_status, is_featured, featured_until, address, phone, description, logo_url').in('id', ids),
+        supa.from('services').select('laundromat_id, is_active').in('laundromat_id', ids),
+        supa.from('operating_hours').select('laundromat_id').in('laundromat_id', ids),
+        supa.from('delivery_zones').select('laundromat_id').in('laundromat_id', ids),
+      ]);
+      const svcCount = new Map();
+      (services || []).forEach((s) => { if (s.is_active) svcCount.set(s.laundromat_id, (svcCount.get(s.laundromat_id) || 0) + 1); });
+      const hourSet = new Set((hours || []).map((h) => h.laundromat_id));
+      const zoneSet = new Set((zones || []).map((z) => z.laundromat_id));
+      const out = (laundromats || []).map((l) => {
+        const checks = [
+          { key: 'profile', label: 'Business profile complete', done: Boolean(l.name && l.address && l.phone) },
+          { key: 'description', label: 'Description added', done: Boolean(l.description) },
+          { key: 'logo', label: 'Logo uploaded', done: Boolean(l.logo_url) },
+          { key: 'services', label: 'At least one active service', done: (svcCount.get(l.id) || 0) > 0 },
+          { key: 'hours', label: 'Operating hours set', done: hourSet.has(l.id) },
+          { key: 'zones', label: 'Delivery zones configured', done: zoneSet.has(l.id) },
+        ];
+        const doneCount = checks.filter((c) => c.done).length;
+        return { id: l.id, name: l.name, verification_status: l.verification_status, business_status: l.business_status, is_featured: l.is_featured, featured_until: l.featured_until, checks, done: doneCount, total: checks.length, percent: Math.round((doneCount / checks.length) * 100) };
+      });
+      return res.status(200).json(successEnvelope(out));
     }
 
     if (action === 'services') {
@@ -81,10 +157,20 @@ export default createHandler(async function handler(req, res) {
     }
 
     if (action === 'promotions') {
-      const { data, error } = await supa.from('promotions').select('*, laundromats(id, name)').eq('owner_id', ctx.user.id).order('created_at', { ascending: false });
+      const { data, error } = await supa.from('promotions').select('*, laundromats(id, name, view_count)').eq('owner_id', ctx.user.id).order('created_at', { ascending: false });
       if (error) return res.status(500).json(errorEnvelope(error));
+      const rows = data || [];
+      const active = rows.filter((p) => p.status === 'active' && (!p.ends_at || new Date(p.ends_at) > new Date())).length;
+      const summary = {
+        total: rows.length,
+        active,
+        impressions: rows.reduce((s, p) => s + (Number(p.impressions) || 0), 0),
+        clicks: rows.reduce((s, p) => s + (Number(p.clicks) || 0), 0),
+        spend: round2(rows.reduce((s, p) => s + (Number(p.amount_paid) || 0), 0)),
+      };
       return res.status(200).json(successEnvelope({
-        promotions: data || [],
+        promotions: rows,
+        summary,
         price: num(settings.promotion_price, 199),
         days: num(settings.promotion_days, 30),
       }));

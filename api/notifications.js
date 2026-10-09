@@ -12,6 +12,15 @@ export default createHandler(async function handler(req, res) {
   const ctx = await requireUser(req);
 
   if (req.method === 'GET') {
+    if ((q.action || '') === 'unread') {
+      const { count, error } = await supa
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', ctx.user.id)
+        .is('read_at', null);
+      if (error) return res.status(500).json(errorEnvelope(error));
+      return res.status(200).json(successEnvelope({ count: count || 0 }));
+    }
     const { data, error } = await supa
       .from('notifications')
       .select('*')

@@ -29,6 +29,41 @@ export function param(name) {
   return new URLSearchParams(location.search).get(name);
 }
 
+export function formatDateOnly(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-ZA', { dateStyle: 'medium' }).format(d);
+}
+
+export function relativeTime(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const diff = Date.now() - d.getTime();
+  const abs = Math.abs(diff);
+  const min = 60 * 1000;
+  const hour = 60 * min;
+  const day = 24 * hour;
+  const week = 7 * day;
+  const fmt = (n, unit) => `${n} ${unit}${n === 1 ? '' : 's'} ${diff >= 0 ? 'ago' : 'from now'}`;
+  if (abs < min) return 'just now';
+  if (abs < hour) return fmt(Math.round(abs / min), 'min');
+  if (abs < day) return fmt(Math.round(abs / hour), 'hour');
+  if (abs < week) return fmt(Math.round(abs / day), 'day');
+  return formatDateOnly(value);
+}
+
+export function pct(value, digits = 0) {
+  const n = Number(value) || 0;
+  return `${n.toFixed(digits)}%`;
+}
+
+export function titleCase(value) {
+  if (!value) return '';
+  return String(value).replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 const STATUS_LABELS = {
   pending_payment: 'Pending payment',
   pending_acceptance: 'Awaiting acceptance',

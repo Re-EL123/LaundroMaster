@@ -43,11 +43,16 @@ import { mountDashboard } from '../../../shared/js/shell.js';
     const btn = e.target.closest('button[data-status]');
     if (!btn) return;
     btn.disabled = true;
+    const status = btn.dataset.status;
+    let reason = `Marked ${status} by ${user.email}`;
+    if (status !== 'approved') {
+      reason = window.prompt('Reason (recorded in the audit log):', reason) || reason;
+    }
     try {
       await api.post('/admin?action=verify', {
         laundromat_id: btn.dataset.id,
-        status: btn.dataset.status,
-        reason: `Marked ${btn.dataset.status} by ${user.email}`,
+        status,
+        reason,
       });
       toast('Laundromat updated', 'success');
       load();

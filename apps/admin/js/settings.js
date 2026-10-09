@@ -4,23 +4,37 @@ import { escapeHtml } from '../../../shared/js/format.js';
 import { mountDashboard } from '../../../shared/js/shell.js';
 
 const FIELDS = [
-  { key: 'platform_name', label: 'Platform name', type: 'text' },
-  { key: 'currency', label: 'Currency', type: 'text' },
-  { key: 'market', label: 'Market', type: 'text' },
-  { key: 'commission_percent', label: 'Default commission (%)', type: 'number', step: '0.1' },
-  { key: 'delivery_fee', label: 'Delivery fee', type: 'number', step: '0.01' },
-  { key: 'payout_min', label: 'Minimum payout', type: 'number', step: '0.01' },
-  { key: 'promotion_price', label: 'Promotion price', type: 'number', step: '0.01' },
-  { key: 'promotion_days', label: 'Promotion duration (days)', type: 'number' },
-  { key: 'payout_auto_approve', label: 'Auto-approve payouts', type: 'bool' },
-  { key: 'customer_plus_free_delivery', label: 'LaundroMaster+ members get free delivery', type: 'bool' },
-  { key: 'feature_owner_subscriptions', label: 'Owner subscriptions enabled', type: 'bool' },
-  { key: 'feature_customer_plans', label: 'Customer plans enabled', type: 'bool' },
-  { key: 'feature_promotions', label: 'Promotions enabled', type: 'bool' },
-  { key: 'feature_payouts', label: 'Payouts enabled', type: 'bool' },
-  { key: 'feature_refunds', label: 'Refunds enabled', type: 'bool' },
-  { key: 'maintenance_mode', label: 'Maintenance mode', type: 'bool' },
+  { key: 'platform_name', label: 'Platform name', type: 'text', section: 'Branding' },
+  { key: 'currency', label: 'Currency', type: 'text', section: 'Branding' },
+  { key: 'market', label: 'Market', type: 'text', section: 'Branding' },
+  { key: 'commission_percent', label: 'Default commission (%)', type: 'number', step: '0.1', section: 'Fees & payouts' },
+  { key: 'delivery_fee', label: 'Delivery fee', type: 'number', step: '0.01', section: 'Fees & payouts' },
+  { key: 'payout_min', label: 'Minimum payout', type: 'number', step: '0.01', section: 'Fees & payouts' },
+  { key: 'promotion_price', label: 'Promotion price', type: 'number', step: '0.01', section: 'Fees & payouts' },
+  { key: 'promotion_days', label: 'Promotion duration (days)', type: 'number', section: 'Fees & payouts' },
+  { key: 'payout_auto_approve', label: 'Auto-approve payouts', type: 'bool', section: 'Fees & payouts' },
+  { key: 'customer_plus_free_delivery', label: 'LaundroMaster+ members get free delivery', type: 'bool', section: 'Fees & payouts' },
+  { key: 'feature_owner_subscriptions', label: 'Owner subscriptions enabled', type: 'bool', section: 'Feature flags' },
+  { key: 'feature_customer_plans', label: 'Customer plans enabled', type: 'bool', section: 'Feature flags' },
+  { key: 'feature_promotions', label: 'Promotions enabled', type: 'bool', section: 'Feature flags' },
+  { key: 'feature_payouts', label: 'Payouts enabled', type: 'bool', section: 'Feature flags' },
+  { key: 'feature_refunds', label: 'Refunds enabled', type: 'bool', section: 'Feature flags' },
+  { key: 'maintenance_mode', label: 'Maintenance mode', type: 'bool', section: 'Feature flags' },
 ];
+
+function fieldHtml(f, data) {
+  const value = data[f.key];
+  if (f.type === 'bool') {
+    return `<div class="field">
+      <label class="label"><input type="checkbox" id="f_${f.key}" ${value ? 'checked' : ''}> ${escapeHtml(f.label)}</label>
+    </div>`;
+  }
+  const v = value == null ? '' : String(value);
+  return `<div class="field">
+    <label class="label" for="f_${f.key}">${escapeHtml(f.label)}</label>
+    <input class="input" id="f_${f.key}" type="${f.type}" step="${f.step || ''}" value="${escapeHtml(v)}">
+  </div>`;
+}
 
 (async function () {
   const user = await mountDashboard({ allowed: ['admin', 'super_admin'] });
@@ -33,19 +47,11 @@ const FIELDS = [
   skeleton(host, 5, 60);
   try {
     const { data } = await api.get('/admin?action=settings');
-    host.innerHTML = FIELDS.map((f) => {
-      const value = data[f.key];
-      if (f.type === 'bool') {
-        return `<div class="field">
-          <label class="label"><input type="checkbox" id="f_${f.key}" ${value ? 'checked' : ''}> ${escapeHtml(f.label)}</label>
-        </div>`;
-      }
-      const v = value == null ? '' : String(value);
-      return `<div class="field">
-        <label class="label" for="f_${f.key}">${escapeHtml(f.label)}</label>
-        <input class="input" id="f_${f.key}" type="${f.type}" step="${f.step || ''}" value="${escapeHtml(v)}">
-      </div>`;
-    }).join('');
+    const sections = [...new Set(FIELDS.map((f) => f.section))];
+    host.innerHTML = sections.map((section) => `<section class="stack">
+      <h3 class="text-sm text-muted">${escapeHtml(section)}</h3>
+      ${FIELDS.filter((f) => f.section === section).map((f) => fieldHtml(f, data)).join('')}
+    </section>`).join('');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();

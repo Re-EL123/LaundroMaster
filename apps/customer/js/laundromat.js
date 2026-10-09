@@ -1,5 +1,5 @@
 import { api } from '../../../shared/js/api-client.js';
-import { skeleton, emptyState, errorState, toast } from '../../../shared/js/ui.js';
+import { skeleton, emptyState, errorState, toast, badge } from '../../../shared/js/ui.js';
 import { escapeHtml, currency, formatDate, param } from '../../../shared/js/format.js';
 import { mountCustomerHeader, requireCustomer } from '../../../shared/js/chrome.js';
 import { getSession, portalUrl } from '../../../shared/js/auth-client.js';
@@ -44,18 +44,26 @@ async function loadBusiness() {
   try {
     const { data: b } = await api.get(`/laundromats?id=${encodeURIComponent(id)}`);
     const rating = Number(b.rating_average) || 0;
+    const stars = `${'\u2605'.repeat(Math.round(rating))}<span class="text-muted">${'\u2606'.repeat(Math.max(0, 5 - Math.round(rating)))}</span>`;
     bizEl.innerHTML = `<article class="card">
       <div class="card-body">
         <div class="detail-head">
           <div>
-            <h1 class="card-title" style="font-size:1.6rem">${escapeHtml(b.name)}</h1>
+            <div class="flex wrap">
+              <h1 class="card-title" style="font-size:1.6rem">${escapeHtml(b.name)}</h1>
+              ${b.is_featured ? badge('Featured', 'warning') : ''}
+            </div>
             <p class="card-meta">${escapeHtml(b.address || 'Address not provided')}</p>
-            <p class="rating text-sm">${b.rating_count ? `\u2605 ${rating.toFixed(1)} (${b.rating_count} reviews)` : 'New'}</p>
+            <p class="rating text-sm">${b.rating_count ? `${stars} ${rating.toFixed(1)} (${b.rating_count} reviews)` : 'New'}</p>
+            <p class="flex wrap text-xs">${Number(b.view_count) > 0 ? `<span class="pill">${Number(b.view_count)} views</span>` : ''}${b.phone ? `<span class="pill">${escapeHtml(b.phone)}</span>` : ''}</p>
           </div>
         </div>
         ${b.description ? `<p>${escapeHtml(b.description)}</p>` : ''}
       </div>
     </article>`;
+    if (b.is_featured) {
+      api.post('/laundromats?action=promotion-click', { laundromat_id: id }).catch(() => {});
+    }
   } catch (err) {
     errorState(bizEl, err.message || 'Failed to load laundromat.');
     return;
