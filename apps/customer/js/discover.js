@@ -1,0 +1,4 @@
+import { api } from '../../../shared/js/api-client.js';
+const list=document.getElementById('list');
+list.innerHTML='<div class="card skeleton" style="height:180px"></div><div class="card skeleton" style="height:180px"></div><div class="card skeleton" style="height:180px"></div>';
+api.get('/laundromats').then(r=>{ list.innerHTML=''; (r.data||[]).forEach(i=>{ const c=document.createElement('article'); c.className='card'; c.innerHTML=`<div class="card-body"><h3 class="card-title">${i.name}</h3><p class="card-meta">${i.address||''}</p><a class="btn btn-primary" href="laundromat.html?id=${encodeURIComponent(i.id)}">View</a></div>`; list.appendChild(c); }); if(!(r.data||[]).length) list.innerHTML='<p class="text-muted">No results</p>'; }).catch(()=>{ list.innerHTML='<p class="error">Failed to load</p>'; });

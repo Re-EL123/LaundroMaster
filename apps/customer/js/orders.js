@@ -1,0 +1,3 @@
+import { api } from '../../../shared/js/api-client.js';
+const list=document.getElementById('list');
+api.get('/bookings').then(r=>{ list.innerHTML=''; (r.data||[]).forEach(b=>{ const c=document.createElement('article'); c.className='card'; c.innerHTML=`<div class="card-body"><h3>${b.id}</h3><p class="text-sm text-muted">${b.status}</p><a class="btn btn-secondary" href="order-details.html?id=${encodeURIComponent(b.id)}">Details</a></div>`; list.appendChild(c); }); if(!(r.data||[]).length) list.innerHTML='<p class="text-muted">No orders</p>'; }).catch(()=>list.innerHTML='<p class="error">Failed</p>');

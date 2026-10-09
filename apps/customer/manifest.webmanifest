@@ -1,0 +1,8 @@
+{
+  "name": "LaundroMaster Customer",
+  "short_name": "LM Customer",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#F7F7F8",
+  "theme_color": "#D90429"
+}

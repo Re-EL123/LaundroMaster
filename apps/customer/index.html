@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LaundroMaster - Customer</title>
+  <link rel="stylesheet" href="../../shared/css/tokens.css">
+  <link rel="stylesheet" href="../../shared/css/reset.css">
+  <link rel="stylesheet" href="../../shared/css/layout.css">
+  <link rel="stylesheet" href="../../shared/css/buttons.css">
+  <link rel="stylesheet" href="../../shared/css/cards.css">
+  <link rel="stylesheet" href="../../shared/css/forms.css">
+  <link rel="stylesheet" href="../../shared/css/utilities.css">
+  <link rel="stylesheet" href="../../shared/css/motion.css">
+  <link rel="stylesheet" href="./css/customer.css">
+  <link rel="manifest" href="./manifest.webmanifest">
+</head>
+<body>
+  <header class="app-header">
+    <div class="page-shell flex justify-between">
+      <a href="./index.html" class="brand">LaundroMaster</a>
+      <nav class="nav flex">
+        <a href="./pages/discover.html">Discover</a>
+        <a href="./pages/orders.html">Orders</a>
+        <a href="./pages/favorites.html">Favorites</a>
+        <a href="./pages/profile.html">Profile</a>
+      </nav>
+    </div>
+  </header>
+  <main class="page-shell" style="padding: var(--space-8) 0;">
+    <section class="hero">
+      <h1>Find nearby laundromats</h1>
+      <p class="text-muted">Book collection and delivery in just a few steps.</p>
+      <form class="search-bar" action="./pages/discover.html" method="get">
+        <input class="input" type="search" name="q" placeholder="Search suburb or service">
+        <button class="btn btn-primary" type="submit">Search</button>
+      </form>
+    </section>
+    <section class="grid" style="margin-top: var(--space-8);">
+      <h2>Nearby</h2>
+      <div class="card-grid" id="nearbyList"></div>
+    </section>
+  </main>
+  <script type="module" src="./js/home.js"></script>
+</body>
+</html>
