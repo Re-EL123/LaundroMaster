@@ -1,4 +1,4 @@
--- LaundroMaster full schema (0001 + 0002 combined). Paste into Supabase SQL Editor and Run.
+-- LaundroMaster full schema. Paste into Supabase -> SQL Editor and Run.
 
 -- LaundroMaster initial schema
 create extension if not exists "pgcrypto";
@@ -303,7 +303,9 @@ create policy "notifications self update" on notifications for update using (use
 
 create policy "documents owner read" on documents for select using (exists(select 1 from laundromats l where l.id = documents.laundromat_id and l.owner_id = auth.uid()) or is_admin(auth.uid()));
 
----- migration 0002: auth roles --
+
+-- ===== 0002_auth_roles.sql =====
+
 -- Role-based auth: create profile + default role on signup, and role helper.
 
 -- current user's effective role (prefers highest privilege)
