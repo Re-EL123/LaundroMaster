@@ -47,7 +47,7 @@ export function getRole() {
 }
 
 export function homeForRole(role) {
-  if (role === 'owner') return appUrl('owner');
+  if (role === 'owner' || role === 'staff') return appUrl('owner');
   if (role === 'admin' || role === 'super_admin') return appUrl('admin');
   return appUrl('customer');
 }
