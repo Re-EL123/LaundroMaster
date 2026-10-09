@@ -1,0 +1,6 @@
+apps/
+shared/
+supabase/
+docs/
+tests/
+.github/
