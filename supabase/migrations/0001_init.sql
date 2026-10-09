@@ -267,36 +267,56 @@ create or replace function is_admin(uid uuid) returns boolean as $$
   select exists(select 1 from user_roles where user_id = uid and role in ('admin','super_admin'));
 $$ language sql stable security definer;
 
+drop policy if exists "profiles self read" on profiles;
 create policy "profiles self read" on profiles for select using (auth.uid() = id or is_admin(auth.uid()));
+drop policy if exists "profiles self update" on profiles;
 create policy "profiles self update" on profiles for update using (auth.uid() = id) with check (auth.uid() = id);
 
+drop policy if exists "user_roles self read" on user_roles;
 create policy "user_roles self read" on user_roles for select using (auth.uid() = user_id or is_admin(auth.uid()));
 
+drop policy if exists "laundromats public approved read" on laundromats;
 create policy "laundromats public approved read" on laundromats for select using (verification_status = 'approved' or owner_id = auth.uid() or is_admin(auth.uid()));
+drop policy if exists "laundromats owner insert" on laundromats;
 create policy "laundromats owner insert" on laundromats for insert with check (owner_id = auth.uid());
+drop policy if exists "laundromats owner update" on laundromats;
 create policy "laundromats owner update" on laundromats for update using (owner_id = auth.uid() or is_admin(auth.uid()));
 
+drop policy if exists "services public approved read" on services;
 create policy "services public approved read" on services for select using (
   (is_active and exists(select 1 from laundromats l where l.id = services.laundromat_id and l.verification_status = 'approved'))
   or exists(select 1 from laundromats l where l.id = services.laundromat_id and l.owner_id = auth.uid())
   or is_admin(auth.uid()));
 
+drop policy if exists "bookings customer read" on bookings;
 create policy "bookings customer read" on bookings for select using (customer_id = auth.uid() or is_admin(auth.uid()));
+drop policy if exists "bookings customer insert" on bookings;
 create policy "bookings customer insert" on bookings for insert with check (customer_id = auth.uid());
+drop policy if exists "bookings owner read" on bookings;
 create policy "bookings owner read" on bookings for select using (exists(select 1 from laundromats l where l.id = bookings.laundromat_id and l.owner_id = auth.uid()));
+drop policy if exists "bookings owner update" on bookings;
 create policy "bookings owner update" on bookings for update using (exists(select 1 from laundromats l where l.id = bookings.laundromat_id and l.owner_id = auth.uid()));
 
+drop policy if exists "booking_items read own" on booking_items;
 create policy "booking_items read own" on booking_items for select using (exists(select 1 from bookings b where b.id = booking_items.booking_id and (b.customer_id = auth.uid() or is_admin(auth.uid()) or exists(select 1 from laundromats l where l.id = b.laundromat_id and l.owner_id = auth.uid()))));
 
+drop policy if exists "payments read own" on payments;
 create policy "payments read own" on payments for select using (exists(select 1 from bookings b where b.id = payments.booking_id and (b.customer_id = auth.uid() or is_admin(auth.uid()) or exists(select 1 from laundromats l where l.id = b.laundromat_id and l.owner_id = auth.uid()))));
 
+drop policy if exists "reviews public read" on reviews;
 create policy "reviews public read" on reviews for select using (moderation_status = 'published' or customer_id = auth.uid() or is_admin(auth.uid()));
 
+drop policy if exists "favorites own" on favorites;
 create policy "favorites own" on favorites for select using (user_id = auth.uid());
+drop policy if exists "favorites own insert" on favorites;
 create policy "favorites own insert" on favorites for insert with check (user_id = auth.uid());
+drop policy if exists "favorites own delete" on favorites;
 create policy "favorites own delete" on favorites for delete using (user_id = auth.uid());
 
+drop policy if exists "notifications self read" on notifications;
 create policy "notifications self read" on notifications for select using (user_id = auth.uid() or is_admin(auth.uid()));
+drop policy if exists "notifications self update" on notifications;
 create policy "notifications self update" on notifications for update using (user_id = auth.uid());
 
+drop policy if exists "documents owner read" on documents;
 create policy "documents owner read" on documents for select using (exists(select 1 from laundromats l where l.id = documents.laundromat_id and l.owner_id = auth.uid()) or is_admin(auth.uid()));
