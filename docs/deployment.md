@@ -51,8 +51,12 @@ redirects to `apps/portal/index.html`. Each app reads its API base from
 5. Note the production alias, e.g. `https://laundromaster-sable.vercel.app`.
 
 ## Steps
-1. Create Supabase project; run `supabase/migrations/0001_init.sql` then
-   `supabase/migrations/0002_auth_roles.sql` (SQL editor or `supabase db push`).
+1. Create Supabase project, then apply the schema. Either:
+   - paste the combined `supabase/apply-all.sql` into Supabase -> SQL Editor
+     (simplest), or
+   - run `supabase/migrations/0001_init.sql` then `0002_auth_roles.sql`
+     (`supabase db push`, or `DATABASE_URL=... ./scripts/apply-migrations.sh`).
+   Without this, API routes return `code:"PGRST205"` (table not found).
 2. Create storage buckets: `avatars`, `laundromat-media`, `verification-documents`,
    `booking-attachments`, `receipts`, `platform-assets`.
 3. Configure email provider and iKhokha sandbox + webhook secret.
