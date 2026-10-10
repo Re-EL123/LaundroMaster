@@ -74,8 +74,9 @@ import { mountDashboard } from '../../../shared/js/shell.js';
     if (sub) {
       sub.disabled = true;
       try {
-        await api.post('/payments?action=subscribe', { plan_id: sub.dataset.subscribe });
-        toast('Plan updated', 'success');
+        const { data } = await api.post('/payments?action=subscribe', { plan_id: sub.dataset.subscribe });
+        if (data.checkout_url) { window.location.href = data.checkout_url; return; }
+        toast(data.subscription ? 'Plan activated' : 'Plan updated', 'success');
         load();
       } catch (err) {
         toast(err.message || 'Could not change plan', 'danger');
@@ -94,5 +95,21 @@ import { mountDashboard } from '../../../shared/js/shell.js';
     }
   });
 
-  load();
+  async function reconcileReturn() {
+    const params = new URLSearchParams(location.search);
+    const paymentId = params.get('payment');
+    const sub = params.get('sub');
+    if (!sub) return;
+    history.replaceState(null, '', location.pathname);
+    if (sub === 'canceled') { toast('Checkout cancelled', 'info'); return; }
+    if (sub === 'failed') { toast('Payment failed — please try again', 'danger'); return; }
+    if (sub === 'paid' && paymentId) {
+      try {
+        const { data } = await api.post('/payments?action=verify', { payment_id: paymentId });
+        toast(data.subscription ? 'Subscription active' : 'Confirming your payment…', data.subscription ? 'success' : 'info');
+      } catch { /* webhook may still arrive */ }
+    }
+  }
+
+  load().then(reconcileReturn);
 })();

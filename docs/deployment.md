@@ -9,11 +9,17 @@ Vercel project and env vars.
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-IKHOKHA_API_KEY=
-IKHOKHA_API_SECRET=
-IKHOKHA_WEBHOOK_SECRET=
+# iKhokha (Integrations → Payment API)
+IKHOKHA_APP_ID=
+IKHOKHA_APP_SECRET=
+IKHOKHA_ENTITY_ID=
+IKHOKHA_MODE=test            # test | live
+IKHOKHA_BASE_URL=https://api.ikhokha.com
+IKHOKHA_WEBHOOK_SECRET=      # defaults to IKHOKHA_APP_SECRET
 EMAIL_PROVIDER_API_KEY=
 APP_BASE_URL=https://laundromaster.re-el.co.za
+PUBLIC_APP_URL=https://laundromaster.re-el.co.za
+API_PUBLIC_URL=https://laundromaster-sable.vercel.app
 OWNER_APP_URL=https://laundromaster.re-el.co.za/apps/owner
 ADMIN_APP_URL=https://laundromaster.re-el.co.za/apps/admin
 ALLOWED_ORIGINS=https://laundromaster.re-el.co.za,https://re-el123.github.io,http://localhost:3000

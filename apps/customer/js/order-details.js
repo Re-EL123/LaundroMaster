@@ -13,6 +13,41 @@ const out = document.getElementById('out');
 const CANCELLABLE = ['pending_payment', 'pending_acceptance'];
 const REFUNDABLE = ['completed', 'cancelled', 'rejected', 'payment_failed'];
 
+async function payNow(bookingId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Starting secure payment…'; }
+  try {
+    const { data } = await api.post('/payments?action=create', { booking_id: bookingId });
+    if (data.checkout_url) {
+      window.location.href = data.checkout_url;
+      return;
+    }
+    toast('Payment confirmed', 'success');
+    load();
+  } catch (err) {
+    toast(err.message || 'Could not start payment', 'danger');
+    if (btn) { btn.disabled = false; btn.textContent = 'Pay now'; }
+  }
+}
+
+async function reconcileReturn() {
+  const paymentId = param('payment');
+  const flag = param('paid') ? 'paid' : param('failed') ? 'failed' : param('canceled') ? 'canceled' : null;
+  if (!flag) return;
+  // Clean the URL so a refresh doesn't repeat the check.
+  history.replaceState(null, '', location.pathname + (id ? `?id=${encodeURIComponent(id)}` : ''));
+  if (flag === 'canceled') { toast('Payment cancelled', 'info'); return; }
+  if (flag === 'failed') { toast('Payment failed — you can try again', 'danger'); return; }
+  if (paymentId) {
+    try {
+      const { data } = await api.post('/payments?action=verify', { payment_id: paymentId });
+      if (data.payment && data.payment.status === 'succeeded') toast('Payment received', 'success');
+      else toast('Confirming your payment…', 'info');
+    } catch { /* webhook may still be arriving */ }
+  } else {
+    toast('Payment received', 'success');
+  }
+}
+
 function timeline(history) {
   if (!history || !history.length) return '';
   return `<h3 class="text-sm mt-4">Activity</h3>
@@ -26,6 +61,8 @@ function renderBooking(b) {
   const items = (b.booking_items || []).map((i) => `<li>${escapeHtml(i.service_name_snapshot)} × ${i.quantity} — ${currency(i.line_total)}</li>`).join('');
   const canCancel = CANCELLABLE.includes(b.status);
   const canRefund = REFUNDABLE.includes(b.status) && b.payment && !(b.refund && ['pending', 'approved'].includes(b.refund.status));
+  const canPay = b.status === 'pending_payment';
+  const amountDue = Number(b.total_amount) || 0;
 
   const address = (a) => (a && (a.line1 || a.address)) ? `<p class="text-sm text-muted">${escapeHtml(b.pickup_required ? 'Pickup' : 'Delivery')}: ${escapeHtml(a.line1 || a.address || '')}</p>` : '';
   const pickup = b.pickup_required ? `<p class="text-sm text-muted">Pickup: ${escapeHtml((b.pickup_address && b.pickup_address.line1) || '—')}</p>` : '';
@@ -66,12 +103,16 @@ function renderBooking(b) {
 
         <div class="flex wrap mt-4">
           ${b.laundromat_id ? `<a class="btn btn-secondary" href="${pageHref('laundromat.html')}?id=${encodeURIComponent(b.laundromat_id)}">Rebook</a>` : ''}
+          ${canPay ? `<button class="btn btn-primary" id="payBtn">${amountDue > 0 ? `Pay ${currency(amountDue)}` : 'Complete order'}</button>` : ''}
           ${canCancel ? '<button class="btn btn-danger" id="cancelBtn">Cancel booking</button>' : ''}
           ${canRefund ? '<button class="btn btn-secondary" id="refundBtn">Request refund</button>' : ''}
         </div>
       </div>
     </article>
     ${timeline(b.history)}`;
+
+  const payBtn = document.getElementById('payBtn');
+  if (payBtn) payBtn.addEventListener('click', () => payNow(id, payBtn));
 
   const cancelBtn = document.getElementById('cancelBtn');
   if (cancelBtn) {
@@ -119,4 +160,7 @@ async function load() {
   }
 }
 
-load();
+(async function init() {
+  await reconcileReturn();
+  load();
+})();

@@ -11,8 +11,8 @@ Authentication uses `Authorization: Bearer <access_token>` obtained from
 | 1 | `/api/auth` | GET, POST | `login`, `register`, `logout`, `refresh`, `update-profile` (Auth), `me` (Auth, GET) |
 | 2 | `/api/laundromats` | GET, POST | list (`?q=&limit=&offset=`), `?id=`, `?action=services&id=`, `?action=favorites` (Auth), `?action=favorite` (Auth, POST toggles) |
 | 3 | `/api/bookings` | GET, POST | list (scoped by role), `?id=`, `?action=create` (Auth), `?action=update-status` (Owner), `?action=cancel` (Auth) |
-| 4 | `/api/payments` | GET, POST | `?booking_id=`/`?id=` (Auth), `?action=create` (Auth); `?action=plans&audience=` (Auth), `?action=subscription&audience=` (Auth), `?action=subscribe` (Auth, `plan_id`), `?action=cancel-subscription` (Auth, `audience`) |
-| 5 | `/api/webhooks` | POST | iKhokha signed events, idempotent processing |
+| 4 | `/api/payments` | GET, POST | `?booking_id=`/`?id=` (Auth), `?action=payment&id=` (Auth); `?action=plans&audience=` (Auth), `?action=subscription&audience=` (Auth), `?action=savings` (Auth); POST `?action=create` (Auth, `booking_id`) → hosted iKhokha paylink, `?action=subscribe` (Auth, `plan_id`), `?action=verify` (Auth, `payment_id`), `?action=cancel-subscription` (Auth, `audience`) |
+| 5 | `/api/webhooks` | POST | iKhokha signed events (`ik-sign` HMAC over path + raw body), idempotent processing |
 | 6 | `/api/uploads` | GET, POST | `?action=sign` (Auth), signed download (`?bucket=&path=`) |
 | 7 | `/api/reviews` | GET, POST | list (`?laundromat_id=`), create (Auth) |
 | 8 | `/api/notifications` | GET, PATCH, POST | list (Auth), `PATCH ?id=` mark read, `?action=read-all` |

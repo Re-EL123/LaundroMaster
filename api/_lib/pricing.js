@@ -16,10 +16,46 @@ export async function activeSubscription(supa, userId, audience) {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    return data || null;
+    if (!data) return null;
+    // Auto-downgrade: a paid period that has ended is no longer active.
+    if (data.current_period_end && new Date(data.current_period_end).getTime() < Date.now()) {
+      await supa.from('subscriptions')
+        .update({ status: 'canceled', canceled_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', data.id);
+      return null;
+    }
+    return data;
   } catch {
     return null;
   }
+}
+
+// Activate (or replace) the single active subscription for a user + audience.
+export async function activateSubscription(supa, { userId, plan, paymentId = null, periodEnd = null }) {
+  if (!userId || !plan) return null;
+  const now = new Date().toISOString();
+  await supa.from('subscriptions')
+    .update({ status: 'canceled', canceled_at: now, updated_at: now })
+    .eq('user_id', userId).eq('audience', plan.audience).in('status', ['active', 'trialing']);
+
+  let end = periodEnd;
+  if (!end && num(plan.price_monthly, 0) > 0) {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 1);
+    end = d.toISOString();
+  }
+
+  const { data, error } = await supa.from('subscriptions').insert({
+    user_id: userId,
+    plan_id: plan.id,
+    audience: plan.audience,
+    status: 'active',
+    payment_id: paymentId,
+    current_period_start: now,
+    current_period_end: end,
+  }).select('*, plans(*)').single();
+  if (error) throw error;
+  return data;
 }
 
 export async function defaultPlan(supa, audience) {

@@ -87,7 +87,7 @@ export default createHandler(async function handler(req, res) {
     } else if (isOwner(ctx)) {
       const ids = await ownedLaundromatIds(supa, ctx.user.id);
       if (!ids.length) return res.status(200).json(successEnvelope([]));
-      request = request.in('laundromat_id', ids);
+      request = request.in('laundromat_id', ids).neq('status', 'pending_payment');
     } else {
       request = request.eq('customer_id', ctx.user.id);
     }
@@ -179,13 +179,9 @@ export default createHandler(async function handler(req, res) {
       await supa.from('booking_items').insert(items.map((i) => ({ ...i, booking_id: booking.id })));
       await supa.from('booking_status_history').insert({ booking_id: booking.id, status: 'pending_payment', actor_id: ctx.user.id });
 
+      // The owner is notified only once payment is confirmed (see api/_lib/billing.js),
+      // so unpaid shopping carts never reach the booking inbox.
       const full = await loadBooking(supa, booking.id);
-      await notifyUser(supa, biz.owner_id, {
-        type: 'booking_new',
-        title: 'New booking received',
-        body: `A new order with ${items.length} item(s) is waiting for your review.`,
-        url: 'apps/owner/pages/bookings.html',
-      });
       return res.status(201).json(successEnvelope(full));
     }
 
@@ -198,6 +194,9 @@ export default createHandler(async function handler(req, res) {
       const existing = await loadBooking(supa, booking_id);
       const permitted = isAdmin(ctx) || (existing.laundromats && existing.laundromats.owner_id === ctx.user.id);
       if (!permitted) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your booking', 403)));
+      if (!isAdmin(ctx) && (existing.status === 'pending_payment' || existing.status === 'payment_failed')) {
+        return res.status(400).json(errorEnvelope(new ApiError('UNPAID', 'This order is awaiting payment and cannot be updated yet')));
+      }
 
       const { data, error } = await supa
         .from('bookings')
@@ -231,8 +230,7 @@ export default createHandler(async function handler(req, res) {
       if (!permitted) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your booking', 403)));
       if (!CANCELLABLE.includes(existing.status) && !isAdmin(ctx)) {
         return res.status(400).json(errorEnvelope(new ApiError('INVALID_STATE', 'This booking can no longer be cancelled')));
-      }
-      const { data, error } = await supa
+      }      const { data, error } = await supa
         .from('bookings')
         .update({ status: 'cancelled', updated_at: new Date().toISOString() })
         .eq('id', bookingId)

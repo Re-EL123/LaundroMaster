@@ -145,8 +145,9 @@ plusCard.addEventListener('click', async (e) => {
   if (join) {
     join.disabled = true;
     try {
-      await api.post('/payments?action=subscribe', { plan_id: join.dataset.plan });
-      toast('Welcome to LaundroMaster+', 'success');
+      const { data } = await api.post('/payments?action=subscribe', { plan_id: join.dataset.plan });
+      if (data.checkout_url) { window.location.href = data.checkout_url; return; }
+      toast(data.subscription ? 'Membership active' : 'Welcome to LaundroMaster+', 'success');
       loadPlus();
       loadSavings();
     } catch (err) {
@@ -166,6 +167,26 @@ plusCard.addEventListener('click', async (e) => {
   }
 });
 
+async function reconcileReturn() {
+  const params = new URLSearchParams(location.search);
+  const paymentId = params.get('payment');
+  const sub = params.get('sub');
+  if (!sub) return;
+  history.replaceState(null, '', location.pathname);
+  if (sub === 'canceled') { toast('Checkout cancelled', 'info'); return; }
+  if (sub === 'failed') { toast('Payment failed — please try again', 'danger'); return; }
+  if (sub === 'paid' && paymentId) {
+    try {
+      const { data } = await api.post('/payments?action=verify', { payment_id: paymentId });
+      if (data.subscription) toast('LaundroMaster+ is active', 'success');
+      else toast('Confirming your membership…', 'info');
+    } catch { /* webhook may still arrive */ }
+    loadPlus();
+    loadSavings();
+  }
+}
+
 load();
 loadPlus();
 loadSavings();
+reconcileReturn();
