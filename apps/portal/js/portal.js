@@ -115,6 +115,7 @@ registerForm.addEventListener('submit', async (e) => {
       password: document.getElementById('regPassword').value,
       full_name: document.getElementById('regName').value.trim(),
       account_type: accountType,
+      ref: new URLSearchParams(location.search).get('ref') || undefined,
     });
     if (result.email_confirmation_required) {
       setLoading(registerForm, false);

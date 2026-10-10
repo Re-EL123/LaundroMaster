@@ -59,6 +59,38 @@
         </div>
       </aside>
     </div>
+    <div class="section-head mt-6"><h2>Saved addresses</h2></div>
+    <section class="card" id="addressCard">
+      <div class="card-body">
+        <div id="addressList" class="stack"></div>
+        <form id="addressForm" class="stack mt-4">
+          <div class="field">
+            <label class="label" for="addr_label">Label</label>
+            <input class="input" id="addr_label" placeholder="Home / Work" required>
+          </div>
+          <div class="field">
+            <label class="label" for="addr_line1">Street address</label>
+            <input class="input" id="addr_line1" autocomplete="street-address" required>
+          </div>
+          <div class="field">
+            <label class="label" for="addr_suburb">Suburb</label>
+            <input class="input" id="addr_suburb">
+          </div>
+          <div class="field">
+            <label class="label" for="addr_city">City</label>
+            <input class="input" id="addr_city" autocomplete="address-level2">
+          </div>
+          <div class="field">
+            <label class="label" for="addr_postal">Postal code</label>
+            <input class="input" id="addr_postal" autocomplete="postal-code">
+          </div>
+          <button class="btn btn-primary" type="submit">Add address</button>
+          <p class="form-msg" id="addrMsg" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+    <div class="section-head mt-6"><h2>Rewards</h2></div>
+    <div id="rewardsCard"></div>
     <div class="section-head mt-6"><h2>Your savings</h2></div>
     <div id="savingsCard"></div>
     <div class="section-head mt-6"><h2>LaundroMaster+</h2></div>

@@ -66,6 +66,37 @@
         <h2 class="text-sm text-muted">Branding &amp; photos</h2>
         <div id="bizList" class="stack"></div>
       </section>
+      <section class="stack" id="teamSection" hidden>
+        <h2 class="text-sm text-muted">Team</h2>
+        <form class="card" id="inviteForm">
+          <div class="card-body">
+            <h2 class="card-title">Add a team member</h2>
+            <p class="text-muted text-sm">They must already have a LaundroMaster account.</p>
+            <div class="field">
+              <label class="label" for="inviteBiz">Laundromat</label>
+              <select class="input" id="inviteBiz"></select>
+            </div>
+            <div class="field">
+              <label class="label" for="inviteEmail">Email</label>
+              <input class="input" id="inviteEmail" type="email" placeholder="name@example.com" required>
+            </div>
+            <div class="field">
+              <label class="label" for="inviteRole">Role</label>
+              <select class="input" id="inviteRole">
+                <option value="staff">Staff — process orders</option>
+                <option value="manager">Manager — full access</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" type="submit" id="inviteBtn">Send invite</button>
+            <p class="form-msg" id="teamMsg" role="status" aria-live="polite"></p>
+          </div>
+        </form>
+        <div id="teamList" class="stack"></div>
+      </section>
+      <section class="stack" id="availabilitySection" hidden>
+        <h2 class="text-sm text-muted">Availability &amp; capacity</h2>
+        <div id="capacityList" class="stack"></div>
+      </section>
     </div>
     </div>
   </main>

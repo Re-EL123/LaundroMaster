@@ -5,7 +5,7 @@ import { adminClient } from './_lib/supabase-admin.js';
 import { query, body, bearer } from './_lib/req.js';
 import { getUser, requireUser, topRole, ROLE_PRIORITY } from './_lib/auth.js';
 import { z } from 'zod';
-import { profileUpdate } from './_lib/validation.js';
+import { profileUpdate, addressSave } from './_lib/validation.js';
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -17,6 +17,7 @@ const registerSchema = z.object({
   password: z.string().min(6),
   full_name: z.string().min(2).optional(),
   account_type: z.enum(['customer', 'owner']).default('customer'),
+  ref: z.string().max(20).optional(),
 });
 
 async function resolveRole(admin, userId) {
@@ -87,10 +88,19 @@ export default createHandler(async function handler(req, res) {
     if (action === 'register') {
       const parsed = registerSchema.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
-      const { email, password, full_name, account_type } = parsed.data;
+      const { email, password, full_name, account_type, ref } = parsed.data;
       const { data, error } = await anon.auth.signUp({ email, password, options: { data: { full_name, account_type } } });
       if (error) return res.status(400).json(errorEnvelope(new ApiError('REGISTRATION_FAILED', error.message)));
       if (data.user) await bootstrapUser(admin, data.user, account_type, full_name);
+      if (ref && data.user && account_type === 'customer') {
+        try {
+          const { data: referrer } = await admin.from('profiles')
+            .select('id').eq('referral_code', String(ref).trim().toUpperCase()).maybeSingle();
+          if (referrer && referrer.id !== data.user.id) {
+            await admin.from('referrals').insert({ referrer_id: referrer.id, referee_id: data.user.id, code: String(ref).trim().toUpperCase(), status: 'pending' });
+          }
+        } catch { /* referral linking is best effort */ }
+      }
       const role = data.user ? await resolveRole(admin, data.user.id) : account_type;
       return res.status(201).json(successEnvelope({
         user: data.user ? { id: data.user.id, email: data.user.email } : null,
@@ -129,6 +139,25 @@ export default createHandler(async function handler(req, res) {
       if (error) return res.status(400).json(errorEnvelope(error));
       return res.status(200).json(successEnvelope(data));
     }
+
+    if (action === 'addresses') {
+      const ctx = await requireUser(req);
+      const parsed = addressSave.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const addresses = parsed.data.addresses.map((a) => ({
+        id: a.id || (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `a${Date.now()}${Math.random().toString(36).slice(2, 8)}`),
+        label: a.label,
+        line1: a.line1,
+        suburb: a.suburb || null,
+        city: a.city || null,
+        postal_code: a.postal_code || null,
+      }));
+      const { data, error } = await ctx.admin.from('profiles')
+        .update({ addresses, updated_at: new Date().toISOString() })
+        .eq('id', ctx.user.id).select('addresses').single();
+      if (error) return res.status(400).json(errorEnvelope(error));
+      return res.status(200).json(successEnvelope({ addresses: data.addresses || [] }));
+    }
   }
 
   if (req.method === 'GET') {
@@ -143,11 +172,37 @@ export default createHandler(async function handler(req, res) {
           full_name: (profile && profile.full_name) || ctx.user.user_metadata?.full_name || null,
           phone: profile ? profile.phone : null,
           avatar_path: profile ? profile.avatar_path : null,
+          addresses: (profile && profile.addresses) || [],
+          credit_balance: profile ? Number(profile.credit_balance) || 0 : 0,
+          referral_code: profile ? profile.referral_code : null,
         },
         roles: ctx.roles,
         role: ctx.role,
       }));
     }
+
+    if (action === 'referral') {
+      const ctx = await getUser(req);
+      if (!ctx.user) return res.status(401).json(errorEnvelope(new ApiError('UNAUTHORIZED', 'Invalid session', 401)));
+      let { data: profile } = await admin.from('profiles').select('referral_code').eq('id', ctx.user.id).maybeSingle();
+      let code = profile && profile.referral_code;
+      if (!code) {
+        code = `LM${(ctx.user.id || '').replace(/-/g, '').slice(0, 6).toUpperCase()}`;
+        await admin.from('profiles').update({ referral_code: code }).eq('id', ctx.user.id);
+      }
+      const [{ data: refs }, { count: rewarded }] = await Promise.all([
+        admin.from('referrals').select('status').eq('referrer_id', ctx.user.id),
+        admin.from('referrals').select('*', { count: 'exact', head: true }).eq('referrer_id', ctx.user.id).eq('status', 'rewarded'),
+      ]);
+      const rows = refs || [];
+      return res.status(200).json(successEnvelope({
+        code,
+        invited: rows.length,
+        completed: (rewarded || 0),
+        pending: rows.filter((r) => r.status === 'pending').length,
+      }));
+    }
+
     return res.status(200).json(successEnvelope({ service: 'auth', ok: true }));
   }
 

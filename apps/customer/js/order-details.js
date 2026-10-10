@@ -13,6 +13,43 @@ const out = document.getElementById('out');
 const CANCELLABLE = ['pending_payment', 'pending_acceptance'];
 const REFUNDABLE = ['completed', 'cancelled', 'rejected', 'payment_failed'];
 
+function printReceipt(b) {
+  const items = (b.booking_items || []).map((i) => `<tr><td>${escapeHtml(i.service_name_snapshot)} × ${i.quantity}</td><td style="text-align:right">${currency(i.line_total)}</td></tr>`).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${escapeHtml(b.id.slice(0, 8))}</title>
+    <style>body{font-family:system-ui,Arial,sans-serif;max-width:420px;margin:24px auto;color:#111}h1{font-size:18px;margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}td{padding:4px 0;border-bottom:1px solid #eee}.total{font-weight:700;border-top:2px solid #111}.muted{color:#666;font-size:12px}</style></head><body>
+    <h1>${escapeHtml((b.laundromats && b.laundromats.name) || 'LaundroMaster')}</h1>
+    <div class="muted">Receipt · Order ${escapeHtml(b.id)}<br>${escapeHtml(formatDate(b.created_at))}</div>
+    <table>${items}
+      <tr><td>Subtotal</td><td style="text-align:right">${currency(b.subtotal_amount)}</td></tr>
+      <tr><td>Collection &amp; delivery</td><td style="text-align:right">${currency(b.delivery_fee)}</td></tr>
+      <tr class="total"><td>Total</td><td style="text-align:right">${currency(b.total_amount)}</td></tr>
+      <tr><td>Payment</td><td style="text-align:right">${escapeHtml(b.payment ? statusLabel(b.payment.status) : 'Unpaid')}</td></tr>
+    </table>
+    <p class="muted">Thank you for choosing LaundroMaster.</p>
+    <script>window.onload=function(){window.print();}</script>
+    </body></html>`;
+  const w = window.open('', '_blank');
+  if (!w) { toast('Allow pop-ups to print your receipt', 'info'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
+function messagesPanel(b) {
+  const messages = (b.messages || []).map((m) => {
+    const own = m.sender_id === undefined ? false : true;
+    return `<div class="chat-line ${m.sender_role === 'customer' ? 'is-out' : 'is-in'}">
+      <span class="chat-meta">${escapeHtml(m.sender_role === 'customer' ? 'you' : 'laundry')} · ${escapeHtml(relativeTime(m.created_at))}</span>
+      <p class="chat-body">${escapeHtml(m.body)}</p>
+    </div>`;
+  }).join('') || '<p class="text-muted text-sm">No messages yet. Ask the laundromat anything about this order.</p>';
+  return `<h3 class="text-sm mt-4">Messages</h3>
+    <div class="chat-thread" id="chatThread">${messages}</div>
+    <form class="flex mt-2" id="chatForm">
+      <input class="input" id="chatInput" placeholder="Type a message…" autocomplete="off">
+      <button class="btn btn-primary" type="submit">Send</button>
+    </form>`;
+}
+
 async function payNow(bookingId, btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Starting secure payment…'; }
   try {
@@ -101,8 +138,11 @@ function renderBooking(b) {
         ${b.payment ? `<p class="text-xs text-muted">Payment: ${escapeHtml(statusLabel(b.payment.status))}${b.refund ? ` · Refund: ${escapeHtml(statusLabel(b.refund.status))}` : ''}</p>` : ''}
         <p class="text-xs text-muted">Placed ${formatDate(b.created_at)}</p>
 
+        ${messagesPanel(b)}
+
         <div class="flex wrap mt-4">
           ${b.laundromat_id ? `<a class="btn btn-secondary" href="${pageHref('laundromat.html')}?id=${encodeURIComponent(b.laundromat_id)}">Rebook</a>` : ''}
+          ${b.payment && b.payment.status === 'succeeded' ? '<button class="btn btn-secondary" id="receiptBtn">Receipt</button>' : ''}
           ${canPay ? `<button class="btn btn-primary" id="payBtn">${amountDue > 0 ? `Pay ${currency(amountDue)}` : 'Complete order'}</button>` : ''}
           ${canCancel ? '<button class="btn btn-danger" id="cancelBtn">Cancel booking</button>' : ''}
           ${canRefund ? '<button class="btn btn-secondary" id="refundBtn">Request refund</button>' : ''}
@@ -143,6 +183,29 @@ function renderBooking(b) {
       } catch (err) {
         toast(err.message || 'Could not request refund', 'danger');
         refundBtn.disabled = false;
+      }
+    });
+  }
+
+  const receiptBtn = document.getElementById('receiptBtn');
+  if (receiptBtn) receiptBtn.addEventListener('click', () => printReceipt(b));
+
+  const chatForm = document.getElementById('chatForm');
+  if (chatForm) {
+    chatForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      try {
+        const { data: msg } = await api.post('/bookings?action=message', { booking_id: id, body: text });
+        const thread = document.getElementById('chatThread');
+        if (thread.querySelector('.text-muted')) thread.innerHTML = '';
+        thread.insertAdjacentHTML('beforeend', `<div class="chat-line is-out"><span class="chat-meta">you · just now</span><p class="chat-body">${escapeHtml(msg.body)}</p></div>`);
+        thread.scrollTop = thread.scrollHeight;
+      } catch (err) {
+        toast(err.message || 'Could not send message', 'danger');
       }
     });
   }

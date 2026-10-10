@@ -3,13 +3,31 @@ import { successEnvelope, errorEnvelope, ApiError } from './_lib/errors.js';
 import { adminClient } from './_lib/supabase-admin.js';
 import { query, body } from './_lib/req.js';
 import { requireRoles } from './_lib/auth.js';
-import { serviceCreate, serviceUpdate, promotionCreate, payoutRequest, ownerLaundromatUpdate } from './_lib/validation.js';
+import {
+  serviceCreate, serviceUpdate, promotionCreate, payoutRequest, ownerLaundromatUpdate,
+  staffInvite, staffUpdate, staffRemove, capacityUpdate,
+} from './_lib/validation.js';
 import { getSettings, num } from './_lib/settings.js';
 import { round2, activeSubscription, defaultPlan } from './_lib/pricing.js';
 
-async function myLaundromatIds(supa, ctx) {
+const OWNER_ROLES = ['owner', 'admin', 'super_admin'];
+
+function isOwnerRole(ctx) {
+  return ctx.roles.some((r) => OWNER_ROLES.includes(r));
+}
+
+// Laundromats the user OWNS — the only ones they may edit.
+async function ownerLaundromatIds(supa, ctx) {
   const { data } = await supa.from('laundromats').select('id').eq('owner_id', ctx.user.id);
   return (data || []).map((r) => r.id);
+}
+
+// Laundromats the user owns or is a member of — for read-only views.
+async function memberLaundromatIds(supa, ctx) {
+  const owned = await ownerLaundromatIds(supa, ctx);
+  const { data } = await supa.from('laundromat_members').select('laundromat_id').eq('user_id', ctx.user.id);
+  const memberIds = (data || []).map((r) => r.laundromat_id);
+  return [...new Set([...owned, ...memberIds])];
 }
 
 async function ownerBalance(supa, ownerId) {
@@ -27,7 +45,8 @@ export default createHandler(async function handler(req, res) {
   if (!supa) return res.status(503).json(errorEnvelope(new ApiError('NOT_CONFIGURED', 'Supabase not configured', 503)));
 
   const ctx = await requireRoles(req, ['owner', 'staff', 'admin', 'super_admin']);
-  const ids = await myLaundromatIds(supa, ctx);
+  const ids = await memberLaundromatIds(supa, ctx);
+  const ownedIds = await ownerLaundromatIds(supa, ctx);
   const settings = await getSettings(supa);
 
   if (req.method === 'GET') {
@@ -192,6 +211,51 @@ export default createHandler(async function handler(req, res) {
       return res.status(200).json(successEnvelope({ ...balance, min: num(settings.payout_min, 200), payouts: data || [] }));
     }
 
+    if (action === 'staff') {
+      if (!ownedIds.length) return res.status(200).json(successEnvelope([]));
+      const { data, error } = await supa
+        .from('laundromat_members')
+        .select('id, laundromat_id, user_id, member_role, created_at, laundromats(id, name), profiles!laundromat_members_user_id_fkey(id, full_name, email)')
+        .in('laundromat_id', ownedIds)
+        .order('created_at', { ascending: false });
+      if (error) return res.status(500).json(errorEnvelope(error));
+      return res.status(200).json(successEnvelope(data || []));
+    }
+
+    if (action === 'staff-candidates') {
+      if (!ownedIds.length) return res.status(200).json(successEnvelope([]));
+      const { data: members } = await supa.from('laundromat_members').select('user_id').in('laundromat_id', ownedIds);
+      const memberIds = (data || []).map((m) => m.user_id);
+      let request = supa.from('profiles').select('id, full_name, email').order('created_at', { ascending: false }).limit(50);
+      if (memberIds.length) request = request.not('id', 'in', `(${memberIds.join(',')})`);
+      const { data, error } = await request;
+      if (error) return res.status(500).json(errorEnvelope(error));
+      return res.status(200).json(successEnvelope(data || []));
+    }
+
+    if (action === 'customers') {
+      if (!ids.length) return res.status(200).json(successEnvelope([]));
+      const { data } = await supa.from('bookings')
+        .select('customer_id, total_amount, status, created_at, profiles!bookings_customer_id_fkey(id, full_name, email, phone)')
+        .in('laundromat_id', ids)
+        .order('created_at', { ascending: false })
+        .limit(500);
+      const map = new Map();
+      (data || []).forEach((b) => {
+        const p = b.profiles || {};
+        const cur = map.get(b.customer_id) || {
+          id: b.customer_id, full_name: p.full_name || null, email: p.email || null, phone: p.phone || null,
+          orders: 0, completed: 0, spend: 0, last_order: b.created_at,
+        };
+        cur.orders += 1;
+        if (b.status === 'completed') { cur.completed += 1; cur.spend = round2(cur.spend + num(b.total_amount, 0)); }
+        if (new Date(b.created_at) > new Date(cur.last_order)) cur.last_order = b.created_at;
+        map.set(b.customer_id, cur);
+      });
+      const rows = [...map.values()].sort((a, b) => b.spend - a.spend);
+      return res.status(200).json(successEnvelope(rows));
+    }
+
     return res.status(200).json(successEnvelope({ service: 'owner', ok: true }));
   }
 
@@ -200,7 +264,7 @@ export default createHandler(async function handler(req, res) {
       const parsed = ownerLaundromatUpdate.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
       const { laundromat_id, ...patch } = parsed.data;
-      if (!ids.includes(laundromat_id)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
+      if (!ownedIds.includes(laundromat_id)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
       const { data, error } = await supa.from('laundromats')
         .update({ ...patch, updated_at: new Date().toISOString() })
         .eq('id', laundromat_id)
@@ -213,7 +277,7 @@ export default createHandler(async function handler(req, res) {
     if (action === 'service-create') {
       const parsed = serviceCreate.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
-      if (!ids.includes(parsed.data.laundromat_id)) {
+      if (!ownedIds.includes(parsed.data.laundromat_id)) {
         return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
       }
       const { data, error } = await supa.from('services').insert(parsed.data).select().single();
@@ -226,7 +290,7 @@ export default createHandler(async function handler(req, res) {
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
       const { id, ...patch } = parsed.data;
       const { data: svc } = await supa.from('services').select('laundromat_id').eq('id', id).maybeSingle();
-      if (!svc || !ids.includes(svc.laundromat_id)) {
+      if (!svc || !ownedIds.includes(svc.laundromat_id)) {
         return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your service', 403)));
       }
       const { data, error } = await supa.from('services').update(patch).eq('id', id).select().single();
@@ -238,7 +302,7 @@ export default createHandler(async function handler(req, res) {
       const id = body(req).id || q.id;
       if (!id) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing id')));
       const { data: svc } = await supa.from('services').select('laundromat_id').eq('id', id).maybeSingle();
-      if (!svc || !ids.includes(svc.laundromat_id)) {
+      if (!svc || !ownedIds.includes(svc.laundromat_id)) {
         return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your service', 403)));
       }
       const { error } = await supa.from('services').update({ is_active: false }).eq('id', id);
@@ -250,7 +314,7 @@ export default createHandler(async function handler(req, res) {
       const parsed = promotionCreate.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
       const { laundromat_id, kind } = parsed.data;
-      if (!ids.includes(laundromat_id)) {
+      if (!ownedIds.includes(laundromat_id)) {
         return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
       }
       const days = parsed.data.days || num(settings.promotion_days, 30);
@@ -292,6 +356,54 @@ export default createHandler(async function handler(req, res) {
       }).select().single();
       if (error) return res.status(400).json(errorEnvelope(error));
       return res.status(201).json(successEnvelope(data));
+    }
+
+    if (action === 'staff-invite') {
+      if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can manage staff', 403)));
+      const parsed = staffInvite.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const { laundromat_id, email, member_role } = parsed.data;
+      if (!ownedIds.includes(laundromat_id)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
+      const { data: profile } = await supa.from('profiles').select('id, full_name, email').ilike('email', email).maybeSingle();
+      if (!profile) return res.status(404).json(errorEnvelope(new ApiError('NOT_FOUND', 'No LaundroMaster account with that email. Ask them to sign up first.', 404)));
+      const { data: existing } = await supa.from('laundromat_members').select('id').eq('laundromat_id', laundromat_id).eq('user_id', profile.id).maybeSingle();
+      if (existing) return res.status(409).json(errorEnvelope(new ApiError('ALREADY_MEMBER', 'This person is already on your team')));
+      const { data, error } = await supa.from('laundromat_members').insert({ laundromat_id, user_id: profile.id, member_role }).select('*, profiles!laundromat_members_user_id_fkey(id, full_name, email)').single();
+      if (error) return res.status(400).json(errorEnvelope(error));
+      await supa.from('user_roles').upsert({ user_id: profile.id, role: 'staff' }, { onConflict: 'user_id,role', ignoreDuplicates: true });
+      return res.status(201).json(successEnvelope(data));
+    }
+
+    if (action === 'staff-update') {
+      if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can manage staff', 403)));
+      const parsed = staffUpdate.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const { data: member } = await supa.from('laundromat_members').select('id, laundromat_id').eq('id', parsed.data.member_id).maybeSingle();
+      if (!member || !ownedIds.includes(member.laundromat_id)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your team', 403)));
+      const { data, error } = await supa.from('laundromat_members').update({ member_role: parsed.data.member_role }).eq('id', member.id).select('*, profiles!laundromat_members_user_id_fkey(id, full_name, email)').single();
+      if (error) return res.status(400).json(errorEnvelope(error));
+      return res.status(200).json(successEnvelope(data));
+    }
+
+    if (action === 'staff-remove') {
+      if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can manage staff', 403)));
+      const parsed = staffRemove.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const { data: member } = await supa.from('laundromat_members').select('id, laundromat_id, user_id').eq('id', parsed.data.member_id).maybeSingle();
+      if (!member || !ownedIds.includes(member.laundromat_id)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your team', 403)));
+      await supa.from('laundromat_members').delete().eq('id', member.id);
+      return res.status(200).json(successEnvelope({ id: member.id, removed: true }));
+    }
+
+    if (action === 'capacity-update') {
+      if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can change availability', 403)));
+      const parsed = capacityUpdate.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const { laundromat_id, ...patch } = parsed.data;
+      if (!ownedIds.includes(laundromat_id)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
+      const { data, error } = await supa.from('laundromats').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', laundromat_id).select().single();
+      if (error) return res.status(400).json(errorEnvelope(error));
+      return res.status(200).json(successEnvelope(data));
     }
 
     return res.status(405).json(errorEnvelope(new ApiError('METHOD_NOT_ALLOWED', 'Method not allowed', 405)));

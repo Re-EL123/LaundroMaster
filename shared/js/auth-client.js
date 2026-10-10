@@ -78,10 +78,10 @@ export async function login(email, password) {
   return session;
 }
 
-export async function register({ email, password, full_name, account_type = 'customer' }) {
+export async function register({ email, password, full_name, account_type = 'customer', ref }) {
   const { ok, status, data } = await raw('/auth?action=register', {
     method: 'POST',
-    body: { email, password, full_name, account_type },
+    body: { email, password, full_name, account_type, ref },
   });
   if (!ok) throw new Error((data && data.error && data.error.message) || `Registration failed (${status})`);
   const payload = data.data || {};

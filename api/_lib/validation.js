@@ -189,3 +189,67 @@ export const adminNotification = z.object({
   audience: z.enum(['all', 'owners', 'customers', 'user']).default('all'),
   user_id: uuid.optional(),
 });
+
+/* ---------- Operations: order lifecycle, staff, capacity ---------- */
+
+export const bookingAssignStaff = z.object({
+  booking_id: uuid,
+  staff_id: uuid.nullable(),
+});
+
+export const bookingMessage = z.object({
+  booking_id: uuid,
+  body: z.string().min(1).max(2000),
+});
+
+export const bookingNote = z.object({
+  booking_id: uuid,
+  internal_notes: z.string().max(2000).nullable(),
+});
+
+export const staffInvite = z.object({
+  laundromat_id: uuid,
+  email: z.string().email(),
+  member_role: z.enum(['manager', 'staff']).default('staff'),
+});
+
+export const staffUpdate = z.object({
+  member_id: uuid,
+  member_role: z.enum(['manager', 'staff']),
+});
+
+export const staffRemove = z.object({
+  member_id: uuid,
+});
+
+export const capacityUpdate = z.object({
+  laundromat_id: uuid,
+  accepting_orders: z.boolean().optional(),
+  max_orders_per_day: z.number().int().positive().nullable().optional(),
+  extra_delivery_fee: z.number().nonnegative().optional(),
+});
+
+/* ---------- Customer: addresses, loyalty, referrals ---------- */
+
+export const addressSave = z.object({
+  addresses: z.array(z.object({
+    id: z.string().max(60).optional(),
+    label: z.string().min(1).max(40),
+    line1: z.string().min(3).max(200),
+    suburb: z.string().max(120).optional().nullable(),
+    city: z.string().max(120).optional().nullable(),
+    postal_code: z.string().max(20).optional().nullable(),
+  })).max(10),
+});
+
+export const referralApply = z.object({
+  code: z.string().min(4).max(20),
+});
+
+/* ---------- Admin: payments ledger ---------- */
+
+export const adminRefundCreate = z.object({
+  payment_id: uuid,
+  amount: z.number().positive().optional(),
+  reason: z.string().max(500).optional().nullable(),
+});

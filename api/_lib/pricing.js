@@ -87,10 +87,10 @@ export async function isCustomerSubscriber(supa, userId) {
   return Boolean(sub);
 }
 
-export function computeDeliveryFee(settings, { deliveryRequired = false, pickupRequired = false, hasCustomerPlan = false } = {}) {
+export function computeDeliveryFee(settings, { deliveryRequired = false, pickupRequired = false, hasCustomerPlan = false, extraFee = 0 } = {}) {
   if (!deliveryRequired && !pickupRequired) return 0;
   if (hasCustomerPlan && bool(settings.customer_plus_free_delivery, true)) return 0;
-  return round2(num(settings.delivery_fee, 0));
+  return round2(num(settings.delivery_fee, 0) + num(extraFee, 0));
 }
 
 export function computeCharges({ subtotal, deliveryFee = 0, tax = 0, discount = 0, commissionPercent = 0 }) {

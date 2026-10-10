@@ -186,7 +186,115 @@ async function reconcileReturn() {
   }
 }
 
+const addressList = document.getElementById('addressList');
+const addressForm = document.getElementById('addressForm');
+let savedAddresses = [];
+
+function renderAddresses() {
+  if (!addressList) return;
+  if (!savedAddresses.length) {
+    addressList.innerHTML = '<p class="text-muted text-sm">No saved addresses yet.</p>';
+    return;
+  }
+  addressList.innerHTML = savedAddresses.map((a) => `<div class="flex justify-between items-center">
+    <div>
+      <strong>${escapeHtml(a.label || 'Address')}</strong>
+      <p class="text-sm text-muted">${escapeHtml([a.line1, a.suburb, a.city, a.postal_code].filter(Boolean).join(', '))}</p>
+    </div>
+    <button class="btn btn-secondary" type="button" data-remove-address="${escapeHtml(a.id)}">Remove</button>
+  </div>`).join('');
+}
+
+async function saveAddresses(list) {
+  const { data } = await api.post('/auth?action=addresses', { addresses: list });
+  savedAddresses = data.addresses || [];
+  renderAddresses();
+}
+
+async function loadAddresses() {
+  if (!addressList) return;
+  try {
+    const { data } = await api.get('/auth?action=me');
+    savedAddresses = data.user.addresses || [];
+    renderAddresses();
+  } catch (err) {
+    addressList.innerHTML = `<p class="text-muted text-sm">${escapeHtml(err.message || 'Could not load addresses.')}</p>`;
+  }
+}
+
+if (addressForm) {
+  addressForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const addrMsg = document.getElementById('addrMsg');
+    const entry = {
+      label: document.getElementById('addr_label').value.trim(),
+      line1: document.getElementById('addr_line1').value.trim(),
+      suburb: document.getElementById('addr_suburb').value.trim() || null,
+      city: document.getElementById('addr_city').value.trim() || null,
+      postal_code: document.getElementById('addr_postal').value.trim() || null,
+    };
+    try {
+      await saveAddresses([...savedAddresses, entry]);
+      addressForm.reset();
+      addrMsg.textContent = 'Address saved.';
+      addrMsg.className = 'form-msg is-success';
+      toast('Address saved', 'success');
+    } catch (err) {
+      addrMsg.textContent = err.message || 'Could not save address.';
+      addrMsg.className = 'form-msg is-error';
+    }
+  });
+  addressList.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-remove-address]');
+    if (!btn) return;
+    try {
+      await saveAddresses(savedAddresses.filter((a) => a.id !== btn.dataset.removeAddress));
+      toast('Address removed', 'success');
+    } catch (err) {
+      toast(err.message || 'Could not remove address', 'danger');
+    }
+  });
+}
+
+const rewardsCard = document.getElementById('rewardsCard');
+async function loadRewards() {
+  if (!rewardsCard) return;
+  try {
+    const [{ data: loyalty }, { data: referral }] = await Promise.all([
+      api.get('/bookings?action=loyalty'),
+      api.get('/auth?action=referral'),
+    ]);
+    const link = `${location.origin}${location.pathname.replace('/apps/customer/pages/profile.html', '/apps/portal/index.html')}?ref=${encodeURIComponent(referral.code)}`;
+    rewardsCard.innerHTML = `<div class="card"><div class="card-body">
+      <div class="flex justify-between wrap">
+        <div><span class="text-xs text-muted">Loyalty points</span><p class="stat-value">${loyalty.points}</p></div>
+        <div><span class="text-xs text-muted">Credit</span><p class="stat-value">${currency(loyalty.credit)}</p></div>
+      </div>
+      <h3 class="text-sm mt-4">Refer a friend</h3>
+      <p class="text-sm text-muted">Share your code <strong>${escapeHtml(referral.code)}</strong> — you both earn rewards.</p>
+      <div class="flex">
+        <input class="input" value="${escapeHtml(link)}" readonly id="refLink">
+        <button class="btn btn-primary" type="button" id="copyRef">Copy</button>
+      </div>
+      <p class="text-xs text-muted mt-2">${referral.invited} invited · ${referral.completed} completed · ${referral.pending} pending</p>
+    </div></div>`;
+    const copyBtn = document.getElementById('copyRef');
+    if (copyBtn) copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(link);
+        toast('Invite link copied', 'success');
+      } catch {
+        document.getElementById('refLink').select();
+      }
+    });
+  } catch (err) {
+    rewardsCard.innerHTML = `<p class="text-muted">${escapeHtml(err.message || 'Could not load rewards.')}</p>`;
+  }
+}
+
 load();
 loadPlus();
 loadSavings();
+loadAddresses();
+loadRewards();
 reconcileReturn();

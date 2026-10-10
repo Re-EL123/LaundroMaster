@@ -6,7 +6,7 @@ import { requireRoles } from './_lib/auth.js';
 import {
   verifyLaundromat, adminSettingsUpdate, planUpsert, planToggle, adminUserUpdate,
   adminLaundromatUpdate, adminPayoutUpdate, adminRefundUpdate, adminPromotionUpdate,
-  adminCommissionUpdate, adminNotification,
+  adminCommissionUpdate, adminNotification, adminRefundCreate,
 } from './_lib/validation.js';
 import { getSettings, setSettings, num } from './_lib/settings.js';
 import { round2 } from './_lib/pricing.js';
@@ -148,6 +148,25 @@ export default createHandler(async function handler(req, res) {
         .order('created_at', { ascending: false }).limit(200);
       if (error) return res.status(500).json(errorEnvelope(error));
       return res.status(200).json(successEnvelope(data || []));
+    }
+
+    if (action === 'payments') {
+      let request = supa.from('payments')
+        .select('*, bookings(id, status, laundromats(name)), profiles!payments_user_id_fkey(id, full_name, email)')
+        .order('created_at', { ascending: false })
+        .limit(Math.min(Number(q.limit) || 200, 500));
+      if (q.status) request = request.eq('status', q.status);
+      if (q.purpose) request = request.eq('purpose', q.purpose);
+      const { data, error } = await request;
+      if (error) return res.status(500).json(errorEnvelope(error));
+      const rows = data || [];
+      const totals = {
+        collected: round2(rows.filter((p) => p.status === 'succeeded').reduce((s, p) => s + num(p.amount, 0), 0)),
+        pending: rows.filter((p) => ['created', 'pending'].includes(p.status)).length,
+        failed: rows.filter((p) => p.status === 'failed').length,
+        refunded: round2(rows.filter((p) => ['refunded', 'partially_refunded'].includes(p.status)).reduce((s, p) => s + num(p.amount, 0), 0)),
+      };
+      return res.status(200).json(successEnvelope({ payments: rows, totals }));
     }
 
     if (action === 'promotions') {
@@ -360,6 +379,30 @@ export default createHandler(async function handler(req, res) {
       }
       await logAdmin(supa, ctx, 'notification.broadcast', 'platform', null, { audience, count: recipients.length });
       return res.status(200).json(successEnvelope({ sent: recipients.length }));
+    }
+
+    if (action === 'refund-create') {
+      const parsed = adminRefundCreate.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const { data: payment } = await supa.from('payments').select('*').eq('id', parsed.data.payment_id).maybeSingle();
+      if (!payment) return res.status(404).json(errorEnvelope(new ApiError('NOT_FOUND', 'Payment not found', 404)));
+      if (payment.status !== 'succeeded' && payment.status !== 'partially_refunded') {
+        return res.status(400).json(errorEnvelope(new ApiError('INVALID_STATE', 'Only a successful payment can be refunded')));
+      }
+      const amount = parsed.data.amount != null ? round2(parsed.data.amount) : num(payment.amount, 0);
+      if (amount <= 0 || amount > num(payment.amount, 0)) {
+        return res.status(400).json(errorEnvelope(new ApiError('INVALID_AMOUNT', 'Refund amount exceeds the payment')));
+      }
+      const { data: refund, error } = await supa.from('refunds').insert({
+        payment_id: payment.id, amount, status: 'pending',
+      }).select().single();
+      if (error) return res.status(400).json(errorEnvelope(error));
+      await supa.from('payments').update({ status: 'refund_pending', updated_at: new Date().toISOString() }).eq('id', payment.id);
+      if (payment.booking_id) {
+        await supa.from('bookings').update({ status: 'refund_pending', updated_at: new Date().toISOString() }).eq('id', payment.booking_id);
+      }
+      await logAdmin(supa, ctx, 'refund.create', 'refund', refund.id, { payment_id: payment.id, amount, reason: parsed.data.reason || null });
+      return res.status(201).json(successEnvelope(refund));
     }
 
     return res.status(405).json(errorEnvelope(new ApiError('METHOD_NOT_ALLOWED', 'Method not allowed', 405)));

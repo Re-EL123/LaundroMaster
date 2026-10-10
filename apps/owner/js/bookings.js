@@ -37,11 +37,32 @@ const SLA_MINUTES = 60;
   const initial = param('status');
   if (initial) filter.value = initial;
 
+  let staffByLaundromat = new Map();
+  async function loadStaff() {
+    try {
+      const { data } = await api.get('/owner?action=staff');
+      staffByLaundromat = new Map();
+      (data || []).forEach((m) => {
+        const arr = staffByLaundromat.get(m.laundromat_id) || [];
+        arr.push({ id: m.user_id, name: (m.profiles && m.profiles.full_name) || m.profiles?.email || 'Staff', role: m.member_role });
+        staffByLaundromat.set(m.laundromat_id, arr);
+      });
+    } catch { /* staff list is optional */ }
+  }
+
   function slaLine(b) {
     if (b.status !== 'pending_acceptance') return '';
     const waited = Math.round((Date.now() - new Date(b.created_at).getTime()) / 60000);
     const overdue = waited >= SLA_MINUTES;
     return `<p class="text-xs ${overdue ? 'error' : 'text-muted'}">${overdue ? `Waiting ${waited} min — respond now` : `New request · respond within ${SLA_MINUTES} min`}</p>`;
+  }
+
+  function staffOptions(b) {
+    const members = staffByLaundromat.get(b.laundromat_id) || [];
+    const opts = ['<option value="">Unassigned</option>'].concat(
+      members.map((m) => `<option value="${m.id}"${b.assigned_staff_id === m.id ? ' selected' : ''}>${escapeHtml(m.name)} (${m.role})</option>`)
+    );
+    return opts.join('');
   }
 
   function render(b) {
@@ -54,7 +75,7 @@ const SLA_MINUTES = 60;
       actions.push(`<button class="btn btn-primary" data-id="${b.id}" data-status="${next}">${ACTION_LABEL[b.status]}</button>`);
     }
     const customer = b.customer && b.customer.full_name ? `<p class="card-meta">${escapeHtml(b.customer.full_name)}${b.customer.phone ? ` · ${escapeHtml(b.customer.phone)}` : ''}</p>` : '';
-    return `<article class="card">
+    return `<article class="card" data-booking="${b.id}">
       <div class="card-body">
         <div class="flex justify-between wrap">
           ${badge(statusLabel(b.status), statusTone(b.status))}
@@ -64,7 +85,11 @@ const SLA_MINUTES = 60;
         ${customer}
         <p class="card-meta">${b.booking_items ? b.booking_items.length : 0} item(s) · ${currency(b.total_amount)}</p>
         ${slaLine(b)}
-        <div class="flex wrap">${actions.join('') || '<span class="text-sm text-muted">No action</span>'}</div>
+        <div class="flex wrap">
+          ${actions.join('')}
+          <button class="btn btn-secondary" data-manage="${b.id}">Message &amp; assign</button>
+        </div>
+        <div class="booking-manage" data-manage-panel="${b.id}" hidden></div>
       </div>
     </article>`;
   }
@@ -96,7 +121,94 @@ const SLA_MINUTES = 60;
     }
   }
 
+  function panelHtml(b) {
+    const messages = (b.messages || []).map((m) => {
+      const mine = m.sender_role !== 'customer';
+      return `<div class="chat-line ${mine ? 'is-out' : 'is-in'}">
+        <span class="chat-meta">${escapeHtml(m.sender_role || 'user')} · ${escapeHtml(relativeTime(m.created_at))}</span>
+        <p class="chat-body">${escapeHtml(m.body)}</p>
+      </div>`;
+    }).join('') || '<p class="text-muted text-sm">No messages yet.</p>';
+    return `
+      <div class="field mt-4">
+        <label class="label">Assigned to</label>
+        <select class="input" data-assign>${staffOptions(b)}</select>
+      </div>
+      <div class="field">
+        <label class="label">Internal note (private)</label>
+        <textarea class="input" rows="2" data-note>${escapeHtml(b.internal_notes || '')}</textarea>
+        <button class="btn btn-secondary" data-save-note>Save note</button>
+      </div>
+      <div class="chat-thread" data-thread>${messages}</div>
+      <form class="flex mt-2" data-chat-form>
+        <input class="input" data-chat-input placeholder="Message the customer…" autocomplete="off">
+        <button class="btn btn-primary" type="submit">Send</button>
+      </form>`;
+  }
+
+  async function openPanel(id) {
+    const card = list.querySelector(`[data-booking="${id}"]`);
+    const panel = card && card.querySelector(`[data-manage-panel="${id}"]`);
+    if (!panel) return;
+    if (!panel.hidden) { panel.hidden = true; return; }
+    panel.hidden = false;
+    panel.innerHTML = '<p class="text-muted text-sm">Loading…</p>';
+    try {
+      const { data: b } = await api.get(`/bookings?id=${encodeURIComponent(id)}`);
+      panel.innerHTML = panelHtml(b);
+      wirePanel(id, panel);
+    } catch (err) {
+      panel.innerHTML = `<p class="error">${escapeHtml(err.message || 'Failed to load.')}</p>`;
+    }
+  }
+
+  function wirePanel(id, panel) {
+    const assign = panel.querySelector('[data-assign]');
+    if (assign) {
+      assign.addEventListener('change', async () => {
+        try {
+          await api.post('/bookings?action=assign-staff', { booking_id: id, staff_id: assign.value || null });
+          toast(assign.value ? 'Order assigned' : 'Assignment cleared', 'success');
+        } catch (err) {
+          toast(err.message || 'Could not assign', 'danger');
+        }
+      });
+    }
+    const saveNote = panel.querySelector('[data-save-note]');
+    if (saveNote) {
+      saveNote.addEventListener('click', async () => {
+        try {
+          await api.post('/bookings?action=note', { booking_id: id, internal_notes: panel.querySelector('[data-note]').value || null });
+          toast('Note saved', 'success');
+        } catch (err) {
+          toast(err.message || 'Could not save note', 'danger');
+        }
+      });
+    }
+    const chatForm = panel.querySelector('[data-chat-form]');
+    if (chatForm) {
+      chatForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = panel.querySelector('[data-chat-input]');
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = '';
+        try {
+          const { data: msg } = await api.post('/bookings?action=message', { booking_id: id, body: text });
+          const thread = panel.querySelector('[data-thread]');
+          if (thread.querySelector('.text-muted')) thread.innerHTML = '';
+          thread.insertAdjacentHTML('beforeend', `<div class="chat-line is-out"><span class="chat-meta">you · just now</span><p class="chat-body">${escapeHtml(msg.body)}</p></div>`);
+          thread.scrollTop = thread.scrollHeight;
+        } catch (err) {
+          toast(err.message || 'Could not send', 'danger');
+        }
+      });
+    }
+  }
+
   list.addEventListener('click', async (e) => {
+    const manage = e.target.closest('[data-manage]');
+    if (manage) { openPanel(manage.dataset.manage); return; }
     const btn = e.target.closest('button[data-status]');
     if (!btn) return;
     btn.disabled = true;
@@ -118,5 +230,6 @@ const SLA_MINUTES = 60;
   });
 
   filter.addEventListener('change', load);
+  await loadStaff();
   load();
 })();

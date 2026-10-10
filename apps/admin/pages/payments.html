@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="LaundroMaster">
   <link rel="manifest" href="../manifest.webmanifest">
-  <title>Admin Verifications - LaundroMaster</title>
+  <title>Admin Payments - LaundroMaster</title>
   <link rel="stylesheet" href="../../../shared/css/tokens.css?v=8">
   <link rel="stylesheet" href="../../../shared/css/reset.css?v=8">
   <link rel="stylesheet" href="../../../shared/css/layout.css?v=8">
@@ -22,7 +22,7 @@
   <link rel="stylesheet" href="../../../shared/css/motion.css?v=8">
   <link rel="stylesheet" href="../css/admin.css?v=8">
 </head>
-<body data-admin-action="verifications">
+<body data-admin-page="payments">
   <aside class="sidebar">
     <a class="brand" href="../index.html"><img src="../../../shared/assets/app-icon.png?v=8" alt="" width="28" height="28">LM Admin</a>
     <nav class="side-nav">
@@ -32,8 +32,8 @@
       <a href="users.html">Users</a>
       <a href="plans.html">Plans</a>
       <a href="commissions.html">Commissions</a>
-      <a href="payouts.html">Payouts</a>
       <a href="payments.html">Payments</a>
+      <a href="payouts.html">Payouts</a>
       <a href="promotions.html">Promotions</a>
       <a href="refunds.html">Refunds</a>
       <a href="settings.html">Settings</a>
@@ -42,17 +42,28 @@
   </aside>
   <main class="main">
     <header class="topbar page-shell flex justify-between">
-      <h1>Verifications</h1>
+      <h1>Payments</h1>
       <div id="sessionMount" class="session-control"></div>
       <div id="notifMount" class="session-control"></div>
     </header>
     <div class="page-shell content">
-      <p class="text-muted" style="margin-bottom:var(--space-4)">Businesses awaiting approval or previously rejected.</p>
-      <div id="detail" style="margin-bottom:var(--space-4)"></div>
+      <div class="flex justify-between items-center" style="margin-bottom:var(--space-4)">
+        <p class="text-muted">Platform payment ledger — bookings and membership charges.</p>
+        <select class="input" id="statusFilter" style="max-width:220px">
+          <option value="">All statuses</option>
+          <option value="succeeded">Succeeded</option>
+          <option value="created">Created</option>
+          <option value="pending">Pending</option>
+          <option value="failed">Failed</option>
+          <option value="refund_pending">Refund pending</option>
+          <option value="refunded">Refunded</option>
+        </select>
+      </div>
+      <div class="stat-grid" id="stats" style="margin-bottom:var(--space-5)"></div>
       <div class="card-grid" id="list"></div>
     </div>
   </main>
   <script src="../js/config.js?v=8"></script>
-  <script type="module" src="../js/verifications.js?v=8"></script>
+  <script type="module" src="../js/payments.js?v=8"></script>
 </body>
 </html>
