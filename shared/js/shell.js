@@ -9,17 +9,18 @@ import './components.js';
 
 function mountNavToggle() {
   const sidebar = document.querySelector('.sidebar');
-  const topbar = document.querySelector('.topbar .page-shell') || document.querySelector('.topbar');
+  const topbar = document.querySelector('.topbar');
   if (!sidebar || !topbar || topbar.querySelector('.nav-toggle')) return null;
+
+  if (!sidebar.id) sidebar.id = 'appSidebar';
 
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'btn btn-secondary nav-toggle';
   btn.setAttribute('aria-label', 'Open navigation menu');
   btn.setAttribute('aria-expanded', 'false');
-  btn.setAttribute('aria-controls', 'appSidebar');
-  btn.textContent = '☰';
-  sidebar.id = sidebar.id || 'appSidebar';
+  btn.setAttribute('aria-controls', sidebar.id);
+  btn.innerHTML = '<span aria-hidden="true">☰</span>';
   topbar.insertBefore(btn, topbar.firstChild);
 
   const backdrop = document.createElement('button');
@@ -29,6 +30,8 @@ function mountNavToggle() {
   backdrop.setAttribute('tabindex', '-1');
   document.body.appendChild(backdrop);
 
+  const desktop = window.matchMedia('(min-width: 1024px)');
+
   const setOpen = (open) => {
     document.body.classList.toggle('nav-open', open);
     document.body.classList.toggle('nav-lock', open);
@@ -37,17 +40,20 @@ function mountNavToggle() {
     if (open) {
       const first = sidebar.querySelector('a');
       if (first) first.focus({ preventScroll: true });
-    } else {
+    } else if (!desktop.matches) {
       btn.focus({ preventScroll: true });
     }
   };
 
+  const close = () => {
+    if (document.body.classList.contains('nav-open')) setOpen(false);
+  };
+
   btn.addEventListener('click', () => setOpen(!document.body.classList.contains('nav-open')));
-  backdrop.addEventListener('click', () => setOpen(false));
-  sidebar.addEventListener('click', (e) => { if (e.target.closest('a')) setOpen(false); });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && document.body.classList.contains('nav-open')) setOpen(false);
-  });
+  backdrop.addEventListener('click', close);
+  sidebar.addEventListener('click', (e) => { if (e.target.closest('a')) close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  desktop.addEventListener?.('change', (e) => { if (e.matches) close(); });
   return { setOpen };
 }
 
