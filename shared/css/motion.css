@@ -1,4 +1,20 @@
 .skeleton { position: relative; overflow: hidden; border-radius: var(--radius-md); background: #e9eaec; }
 .skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.55), transparent); animation: skeleton-shimmer 1.5s ease-in-out infinite; }
 @keyframes skeleton-shimmer { 100% { transform: translateX(100%); } }
-@media (prefers-reduced-motion: reduce) { .skeleton::after { animation: none; } *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }
+
+/* Scroll reveal */
+.reveal { opacity: 0; transform: translateY(12px); transition: opacity var(--motion-panel) ease, transform var(--motion-panel) ease; }
+.reveal.is-visible { opacity: 1; transform: none; }
+
+/* Staggered entrance for grids/lists */
+.stagger > * { animation: card-in var(--motion-panel) ease both; }
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 40ms; }
+.stagger > *:nth-child(3) { animation-delay: 80ms; }
+.stagger > *:nth-child(4) { animation-delay: 120ms; }
+.stagger > *:nth-child(5) { animation-delay: 160ms; }
+.stagger > *:nth-child(6) { animation-delay: 200ms; }
+.stagger > *:nth-child(n+7) { animation-delay: 240ms; }
+@keyframes card-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) { .skeleton::after { animation: none; } .stagger > * { animation: none; } .reveal { opacity: 1; transform: none; transition: none; } *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }

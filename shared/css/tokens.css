@@ -3,12 +3,21 @@
   --color-ink: #111111;
   --color-muted: #6C757D;
   --color-white: #FFFFFF;
+  --color-panel: #FFFFFF;
+  --color-elevated: #FFFFFF;
   --color-surface: #F7F7F8;
   --color-border: #E5E7EB;
   --color-success: #15803D;
   --color-warning: #B45309;
   --color-danger: #B91C1C;
   --color-info: #1D4ED8;
+
+  --chart-1: #D90429;
+  --chart-2: #2563EB;
+  --chart-3: #16A34A;
+  --chart-4: #D97706;
+  --chart-5: #7C3AED;
+  --chart-6: #0891B2;
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -35,3 +44,43 @@
   --motion-base: 200ms;
   --motion-panel: 260ms;
 }
+
+[data-theme="dark"] {
+  --color-primary: #FF4D6A;
+  --color-ink: #F2F2F4;
+  --color-muted: #9BA1A8;
+  --color-panel: #17171B;
+  --color-elevated: #1F1F24;
+  --color-surface: #0B0B0D;
+  --color-border: #2C2C33;
+  --color-success: #4ADE80;
+  --color-warning: #FBBF24;
+  --color-danger: #F87171;
+  --color-info: #60A5FA;
+
+  --shadow-card: 0 2px 12px rgb(0 0 0 / 0.4);
+  --shadow-popover: 0 12px 36px rgb(0 0 0 / 0.55);
+
+  --chart-1: #FF4D6A;
+  --chart-2: #60A5FA;
+  --chart-3: #4ADE80;
+  --chart-4: #FBBF24;
+  --chart-5: #A78BFA;
+  --chart-6: #22D3EE;
+}
+
+/* Tints that are hardcoded light need dark counterparts. */
+[data-theme="dark"] .callout-primary { background: #2A1114; }
+[data-theme="dark"] .banner-info { background: #0E1A2B; border-color: #1E3A5F; }
+[data-theme="dark"] .banner-warning { background: #2A1F07; border-color: #4D3A0D; }
+[data-theme="dark"] .banner-danger { background: #2A1010; border-color: #5A1E1E; }
+[data-theme="dark"] .banner-success { background: #0C2214; border-color: #1C4A2A; }
+[data-theme="dark"] .notif-item.is-unread { background: #2A1114; }
+[data-theme="dark"] .side-nav a.is-active,
+[data-theme="dark"] .nav a.is-active { background: #2A1114; }
+[data-theme="dark"] .badge-success { background: #0C2214; color: #86EFAC; }
+[data-theme="dark"] .badge-danger { background: #2A1010; color: #FCA5A5; }
+[data-theme="dark"] .badge-warning { background: #2A1F07; color: #FDE68A; }
+[data-theme="dark"] .badge-info { background: #0E1A2B; color: #BFDBFE; }
+[data-theme="dark"] .skeleton { background: #232329; }
+[data-theme="dark"] .meter-track { background: #232329; }

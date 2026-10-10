@@ -83,29 +83,53 @@ export default createHandler(async function handler(req, res) {
     }
 
     if (action === 'analytics') {
-      if (!ids.length) return res.status(200).json(successEnvelope({ months: [], top_services: [] }));
-      const monthsBack = 6;
+      const range = ['7d', '30d', '6m', '12m'].includes(q.range) ? q.range : '6m';
+      const daily = range === '7d' || range === '30d';
+      const days = range === '7d' ? 7 : 30;
+      const monthsBack = range === '12m' ? 12 : 6;
+
+      if (!ids.length) return res.status(200).json(successEnvelope({ range, months: [], top_services: [] }));
+
       const since = new Date();
-      since.setMonth(since.getMonth() - (monthsBack - 1));
-      since.setDate(1);
-      since.setHours(0, 0, 0, 0);
+      if (daily) {
+        since.setDate(since.getDate() - (days - 1));
+        since.setHours(0, 0, 0, 0);
+      } else {
+        since.setMonth(since.getMonth() - (monthsBack - 1));
+        since.setDate(1);
+        since.setHours(0, 0, 0, 0);
+      }
+
       const { data: bookings } = await supa.from('bookings')
         .select('status, total_amount, owner_net, created_at, booking_items(service_name_snapshot, quantity, line_total)')
         .in('laundromat_id', ids)
         .gte('created_at', since.toISOString());
       const rows = (bookings || []).filter((b) => b.status === 'completed');
+
       const buckets = [];
-      const cursor = new Date(since);
-      for (let i = 0; i < monthsBack; i++) {
-        const key = `${cursor.getFullYear()}-${cursor.getMonth()}`;
-        buckets.push({ key, label: cursor.toLocaleString('en-ZA', { month: 'short' }), bookings: 0, revenue: 0 });
-        cursor.setMonth(cursor.getMonth() + 1);
+      if (daily) {
+        const cursor = new Date(since);
+        for (let i = 0; i < days; i++) {
+          const key = `${cursor.getFullYear()}-${cursor.getMonth()}-${cursor.getDate()}`;
+          buckets.push({ key, label: cursor.toLocaleString('en-ZA', { day: 'numeric', month: 'short' }), bookings: 0, revenue: 0 });
+          cursor.setDate(cursor.getDate() + 1);
+        }
+      } else {
+        const cursor = new Date(since);
+        for (let i = 0; i < monthsBack; i++) {
+          const key = `${cursor.getFullYear()}-${cursor.getMonth()}`;
+          buckets.push({ key, label: cursor.toLocaleString('en-ZA', { month: 'short' }), bookings: 0, revenue: 0 });
+          cursor.setMonth(cursor.getMonth() + 1);
+        }
       }
+
+      const bucketKey = (d) => (daily
+        ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+        : `${d.getFullYear()}-${d.getMonth()}`);
       const byKey = new Map(buckets.map((b) => [b.key, b]));
       const serviceTotals = new Map();
       rows.forEach((b) => {
-        const d = new Date(b.created_at);
-        const bucket = byKey.get(`${d.getFullYear()}-${d.getMonth()}`);
+        const bucket = byKey.get(bucketKey(new Date(b.created_at)));
         if (bucket) { bucket.bookings += 1; bucket.revenue += Number(b.owner_net) || 0; }
         (b.booking_items || []).forEach((it) => {
           const cur = serviceTotals.get(it.service_name_snapshot) || { name: it.service_name_snapshot, quantity: 0, revenue: 0 };
@@ -114,8 +138,9 @@ export default createHandler(async function handler(req, res) {
           serviceTotals.set(it.service_name_snapshot, cur);
         });
       });
+      buckets.forEach((b) => { b.revenue = round2(b.revenue); });
       const topServices = [...serviceTotals.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 5);
-      return res.status(200).json(successEnvelope({ months: buckets, top_services: topServices }));
+      return res.status(200).json(successEnvelope({ range, months: buckets, top_services: topServices }));
     }
 
     if (action === 'verification') {

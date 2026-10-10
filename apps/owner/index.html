@@ -4,27 +4,28 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#D90429">
-  <link rel="icon" href="../../shared/assets/favicon-32.png?v=9">
-  <link rel="apple-touch-icon" href="../../shared/assets/apple-touch-icon.png?v=9">
+  <script>(function(){try{var t=localStorage.getItem('lm_theme');if(t!=='dark'&&t!=='light'){t=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',t==='dark'?'#0B0B0D':'#D90429');}catch(e){}})();</script>
+  <link rel="icon" href="../../shared/assets/favicon-32.png?v=10">
+  <link rel="apple-touch-icon" href="../../shared/assets/apple-touch-icon.png?v=10">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="LaundroMaster">
   <link rel="manifest" href="./manifest.webmanifest">
   <title>Owner Dashboard - LaundroMaster</title>
-  <link rel="stylesheet" href="../../shared/css/tokens.css?v=9">
-  <link rel="stylesheet" href="../../shared/css/reset.css?v=9">
-  <link rel="stylesheet" href="../../shared/css/layout.css?v=9">
-  <link rel="stylesheet" href="../../shared/css/buttons.css?v=9">
-  <link rel="stylesheet" href="../../shared/css/cards.css?v=9">
-  <link rel="stylesheet" href="../../shared/css/forms.css?v=9">
-  <link rel="stylesheet" href="../../shared/css/utilities.css?v=9">
-  <link rel="stylesheet" href="../../shared/css/motion.css?v=9">
-  <link rel="stylesheet" href="./css/owner.css?v=9">
+  <link rel="stylesheet" href="../../shared/css/tokens.css?v=10">
+  <link rel="stylesheet" href="../../shared/css/reset.css?v=10">
+  <link rel="stylesheet" href="../../shared/css/layout.css?v=10">
+  <link rel="stylesheet" href="../../shared/css/buttons.css?v=10">
+  <link rel="stylesheet" href="../../shared/css/cards.css?v=10">
+  <link rel="stylesheet" href="../../shared/css/forms.css?v=10">
+  <link rel="stylesheet" href="../../shared/css/utilities.css?v=10">
+  <link rel="stylesheet" href="../../shared/css/motion.css?v=10">
+  <link rel="stylesheet" href="./css/owner.css?v=10">
 </head>
 <body>
   <aside class="sidebar">
-    <a class="brand" href="index.html"><img src="../../shared/assets/app-icon.png?v=9" alt="" width="28" height="28">LM Owner</a>
+    <a class="brand" href="index.html"><img src="../../shared/assets/app-icon.png?v=10" alt="" width="28" height="28">LM Owner</a>
     <nav class="side-nav">
       <a href="index.html">Dashboard</a>
       <a href="pages/bookings.html">Bookings</a>
@@ -51,20 +52,28 @@
       </div>
       <div class="layout-split grid mt-6">
         <section>
-          <div class="section-head"><h2>Earnings trend</h2><span class="text-sm text-muted">Your net · last 6 months</span></div>
-          <div class="card"><div class="card-body" id="chart"><p class="text-muted">Loading…</p></div></div>
+          <div class="section-head">
+            <h2>Earnings trend</h2>
+            <div class="filter-bar" id="rangeFilter" role="group" aria-label="Chart range">
+              <button type="button" class="chip" data-range="7d">7d</button>
+              <button type="button" class="chip" data-range="30d">30d</button>
+              <button type="button" class="chip is-active" data-range="6m">6m</button>
+              <button type="button" class="chip" data-range="12m">12m</button>
+            </div>
+          </div>
+          <div class="card reveal"><div class="card-body" id="chart"><p class="text-muted">Loading…</p></div></div>
           <div class="section-head mt-6"><h2>Top services</h2></div>
           <div id="topServices"></div>
         </section>
-        <aside class="card">
+        <aside class="card reveal">
           <div class="card-body" id="checklist"><p class="text-muted">Loading…</p></div>
         </aside>
       </div>
       <div class="section-head mt-6"><h2>Recent bookings</h2><a class="text-sm" href="pages/bookings.html">View all</a></div>
-      <div class="card-grid" id="recent"></div>
+      <div class="card-grid stagger" id="recent"></div>
     </div>
   </main>
-  <script src="./js/config.js?v=9"></script>
-  <script type="module" src="./js/dashboard.js?v=9"></script>
+  <script src="./js/config.js?v=10"></script>
+  <script type="module" src="./js/dashboard.js?v=10"></script>
 </body>
 </html>

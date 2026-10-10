@@ -2,6 +2,11 @@ import { getSession, logout, portalUrl, appUrl } from './auth-client.js';
 import { escapeHtml } from './format.js';
 import { mountNotifications } from './notifications-ui.js';
 import { wireInstallButton } from './pwa.js';
+import { initTheme, mountThemeToggle } from './theme.js';
+import { wirePrefetch } from './prefetch.js';
+import { observeEnhancements } from './ui.js';
+import { cacheClear } from './cache.js';
+import './components.js';
 
 function customerPaths() {
   const inPages = /\/pages\//.test(location.pathname);
@@ -12,11 +17,12 @@ function customerPaths() {
     orders: inPages ? 'orders.html' : './pages/orders.html',
     favorites: inPages ? 'favorites.html' : './pages/favorites.html',
     profile: inPages ? 'profile.html' : './pages/profile.html',
-    icon: `${shared}/assets/app-icon.png?v=9`,
+    icon: `${shared}/assets/app-icon.png?v=10`,
   };
 }
 
 export function mountCustomerHeader(active = '') {
+  initTheme();
   const host = document.getElementById('appHeader');
   if (!host) return;
   const p = customerPaths();
@@ -48,6 +54,7 @@ export function mountCustomerHeader(active = '') {
       <button type="button" class="btn btn-secondary" id="signOutBtn">Sign out</button>`;
     slot.querySelector('#signOutBtn').addEventListener('click', async (e) => {
       e.target.disabled = true;
+      cacheClear();
       await logout();
       location.href = p.home;
     });
@@ -60,8 +67,16 @@ export function mountCustomerHeader(active = '') {
   installBtn.className = 'btn btn-secondary';
   installBtn.textContent = 'Install';
   installBtn.hidden = true;
-  host.querySelector('.page-shell')?.appendChild(installBtn);
   wireInstallButton(installBtn);
+
+  const actions = document.createElement('div');
+  actions.className = 'flex header-actions';
+  actions.appendChild(installBtn);
+  mountThemeToggle(actions);
+  host.querySelector('.page-shell')?.appendChild(actions);
+
+  wirePrefetch();
+  observeEnhancements();
 }
 
 export function requireCustomer() {

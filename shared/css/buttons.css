@@ -2,7 +2,7 @@
 .btn:focus-visible { outline:none; box-shadow: var(--focus-ring); }
 .btn:disabled { opacity:0.6; cursor:not-allowed; }
 .btn-primary { background: var(--color-primary); color: var(--color-white); }
-.btn-secondary { background: var(--color-white); color: var(--color-ink); border-color: var(--color-border); }
+.btn-secondary { background: var(--color-panel); color: var(--color-ink); border-color: var(--color-border); }
 .btn-ghost { background: transparent; color: var(--color-ink); }
 .btn-danger { background: var(--color-danger); color: var(--color-white); }
 @media (hover:hover) and (pointer:fine) { .btn-primary:hover:not(:disabled){ filter: brightness(0.95); transform: translateY(-1px); } .btn-secondary:hover:not(:disabled){ background: var(--color-surface); } }

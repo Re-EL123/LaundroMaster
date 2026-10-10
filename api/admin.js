@@ -63,6 +63,36 @@ export default createHandler(async function handler(req, res) {
       const { count: refundsPending } = await supa.from('refunds').select('*', { count: 'exact', head: true }).in('status', ['pending', 'approved']);
       const { count: commissionsPending } = await supa.from('commissions').select('*', { count: 'exact', head: true }).eq('status', 'pending');
 
+      // Trend + status breakdown for the dashboard charts.
+      const monthsBack = 12;
+      const since = new Date();
+      since.setMonth(since.getMonth() - (monthsBack - 1));
+      since.setDate(1);
+      since.setHours(0, 0, 0, 0);
+      const { data: trendRows } = await supa.from('bookings')
+        .select('status, commission_amount, platform_fee, created_at')
+        .gte('created_at', since.toISOString());
+      const months = [];
+      const cursor = new Date(since);
+      for (let i = 0; i < monthsBack; i++) {
+        const key = `${cursor.getFullYear()}-${cursor.getMonth()}`;
+        months.push({ key, label: cursor.toLocaleString('en-ZA', { month: 'short' }), bookings: 0, revenue: 0 });
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+      const monthByKey = new Map(months.map((m) => [m.key, m]));
+      const statusMap = new Map();
+      (trendRows || []).forEach((b) => {
+        const d = new Date(b.created_at);
+        const bucket = monthByKey.get(`${d.getFullYear()}-${d.getMonth()}`);
+        if (bucket) {
+          bucket.bookings += 1;
+          if (b.status === 'completed') bucket.revenue += num(b.commission_amount, 0) + num(b.platform_fee, 0);
+        }
+        statusMap.set(b.status, (statusMap.get(b.status) || 0) + 1);
+      });
+      months.forEach((m) => { m.revenue = round2(m.revenue); });
+      const byStatus = [...statusMap.entries()].map(([status, count]) => ({ status, count }));
+
       return res.status(200).json(successEnvelope({
         pending: pending || 0,
         approved: approved || 0,
@@ -77,6 +107,8 @@ export default createHandler(async function handler(req, res) {
         promotions_active: promotionsActive || 0,
         refunds_pending: refundsPending || 0,
         commissions_pending: commissionsPending || 0,
+        months,
+        by_status: byStatus,
       }));
     }
 

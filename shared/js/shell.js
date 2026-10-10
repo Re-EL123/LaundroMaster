@@ -2,8 +2,57 @@ import { guard } from './guard.js';
 import { mountSignOut } from './session.js';
 import { mountNotifications } from './notifications-ui.js';
 import { wireInstallButton } from './pwa.js';
+import { initTheme, mountThemeToggle } from './theme.js';
+import { wirePrefetch } from './prefetch.js';
+import { observeEnhancements } from './ui.js';
+import './components.js';
+
+function mountNavToggle() {
+  const sidebar = document.querySelector('.sidebar');
+  const topbar = document.querySelector('.topbar .page-shell') || document.querySelector('.topbar');
+  if (!sidebar || !topbar || topbar.querySelector('.nav-toggle')) return null;
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn-secondary nav-toggle';
+  btn.setAttribute('aria-label', 'Open navigation menu');
+  btn.setAttribute('aria-expanded', 'false');
+  btn.setAttribute('aria-controls', 'appSidebar');
+  btn.textContent = '☰';
+  sidebar.id = sidebar.id || 'appSidebar';
+  topbar.insertBefore(btn, topbar.firstChild);
+
+  const backdrop = document.createElement('button');
+  backdrop.type = 'button';
+  backdrop.className = 'nav-backdrop';
+  backdrop.setAttribute('aria-label', 'Close navigation menu');
+  backdrop.setAttribute('tabindex', '-1');
+  document.body.appendChild(backdrop);
+
+  const setOpen = (open) => {
+    document.body.classList.toggle('nav-open', open);
+    document.body.classList.toggle('nav-lock', open);
+    btn.setAttribute('aria-expanded', String(open));
+    btn.setAttribute('aria-label', open ? 'Close navigation menu' : 'Open navigation menu');
+    if (open) {
+      const first = sidebar.querySelector('a');
+      if (first) first.focus({ preventScroll: true });
+    } else {
+      btn.focus({ preventScroll: true });
+    }
+  };
+
+  btn.addEventListener('click', () => setOpen(!document.body.classList.contains('nav-open')));
+  backdrop.addEventListener('click', () => setOpen(false));
+  sidebar.addEventListener('click', (e) => { if (e.target.closest('a')) setOpen(false); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.body.classList.contains('nav-open')) setOpen(false);
+  });
+  return { setOpen };
+}
 
 export async function mountDashboard({ allowed, sidebarSelector = '.side-nav' } = {}) {
+  initTheme();
   const user = await guard(allowed || []);
   if (!user) return null;
 
@@ -22,13 +71,24 @@ export async function mountDashboard({ allowed, sidebarSelector = '.side-nav' } 
 
   const topbar = document.querySelector('.topbar .page-shell') || document.querySelector('.topbar');
   if (topbar && !topbar.querySelector('.install-app-btn')) {
+    const actions = document.createElement('div');
+    actions.className = 'flex topbar-actions';
+    mountThemeToggle(actions);
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn btn-secondary install-app-btn';
     btn.hidden = true;
     btn.textContent = 'Install';
-    topbar.appendChild(btn);
+    actions.appendChild(btn);
     wireInstallButton(btn);
+
+    const cluster = document.getElementById('sessionMount')?.parentElement;
+    const target = (cluster && cluster !== topbar && cluster.classList.contains('flex')) ? cluster : topbar;
+    target.appendChild(actions);
   }
+
+  mountNavToggle();
+  wirePrefetch();
+  observeEnhancements();
   return user;
 }

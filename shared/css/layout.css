@@ -1,9 +1,11 @@
 .page-shell { width: min(100% - 2rem, 80rem); margin-inline: auto; }
 .main { min-width: 0; }
+.topbar-actions { gap: var(--space-2); }
+.theme-toggle { min-width: 2.5rem; font-size: 1rem; line-height: 1; }
 .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
 .toolbar { display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: flex-end; margin-bottom: var(--space-6); }
 .table-wrap { overflow-x: auto; }
-.table { width: 100%; border-collapse: collapse; background: var(--color-white); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+.table { width: 100%; border-collapse: collapse; background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
 .table th, .table td { text-align: left; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border); font-size: 0.9rem; white-space: nowrap; }
 .table th { background: var(--color-surface); font-weight: 600; }
 .table tr:last-child td { border-bottom: 0; }
@@ -18,4 +20,21 @@
   .stepper { gap: var(--space-1); }
   .stepper-label { font-size: 0.62rem; word-break: break-word; }
   .metric-grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+}
+
+/* ---- Mobile slide-over navigation ---- */
+.nav-toggle { display: none; }
+.nav-backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / 0.45); border: 0; padding: 0; opacity: 0; visibility: hidden; transition: opacity var(--motion-base) ease, visibility var(--motion-base) ease; z-index: 40; }
+body.nav-open .nav-backdrop { opacity: 1; visibility: visible; }
+body.nav-lock { overflow: hidden; }
+
+@media (max-width: 1023px) {
+  .nav-toggle { display: inline-flex; }
+  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: min(80vw, 300px); z-index: 50; transform: translateX(-102%); transition: transform var(--motion-panel) cubic-bezier(0.22, 1, 0.36, 1); box-shadow: var(--shadow-popover); overflow-y: auto; }
+  body.nav-open .sidebar { transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar { transition: none; }
+  .nav-backdrop { transition: none; }
 }

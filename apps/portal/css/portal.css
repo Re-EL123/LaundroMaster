@@ -97,7 +97,7 @@
 /* ---------- Auth card ---------- */
 .portal-card {
   width: 100%;
-  background: var(--color-white);
+  background: var(--color-panel);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-popover);
@@ -122,7 +122,7 @@
   left: 4px;
   width: calc(50% - 4px);
   height: calc(100% - 8px);
-  background: var(--color-white);
+  background: var(--color-panel);
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow-card);
   transition: transform var(--motion-base) ease;

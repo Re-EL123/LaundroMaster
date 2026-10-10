@@ -1,4 +1,7 @@
 import { escapeHtml, currency } from './format.js';
+import { sparkline, barChart as svgBarChart, initCharts } from './charts.js';
+
+const reduceMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function skeleton(el, rows = 3, height = 160) {
   if (!el) return;
@@ -84,10 +87,22 @@ export function moneyBreakdown(rows = [], { total } = {}) {
   return `<div class="breakdown">${body}${totalRow}</div>`;
 }
 
-export function statTile({ label, value, hint, tone = '', href } = {}) {
+export function statTile({ label, value, hint, tone = '', href, animate = false, format = 'number', spark = null, delta = null } = {}) {
+  const numeric = typeof value === 'number' && Number.isFinite(value);
+  const valueHtml = animate && numeric
+    ? `<span class="stat-value" data-count="${value}" data-format="${escapeHtml(format)}">0</span>`
+    : `<span class="stat-value">${escapeHtml(String(value == null ? '' : value))}</span>`;
+
+  const deltaHtml = delta && delta.label
+    ? `<span class="stat-delta ${delta.dir === 'down' ? 'is-down' : 'is-up'}">${delta.dir === 'down' ? '▼' : '▲'} ${escapeHtml(String(delta.label))}</span>`
+    : '';
+  const sparkHtml = (spark && spark.length > 1) ? sparkline(spark, { width: 140, height: 36 }) : '';
+
   const inner = `<span class="text-muted text-xs">${escapeHtml(label || '')}</span>
-    <span class="stat-value">${escapeHtml(String(value == null ? '' : value))}</span>
+    <span class="stat-figure">${valueHtml}${deltaHtml}</span>
+    ${sparkHtml}
     ${hint ? `<span class="text-xs text-muted">${escapeHtml(hint)}</span>` : ''}`;
+
   const safeTone = tone === 'warn' ? 'warning' : tone;
   const cls = `card stat-tile${safeTone ? ` is-${safeTone}` : ''}`;
   return href
@@ -95,17 +110,70 @@ export function statTile({ label, value, hint, tone = '', href } = {}) {
     : `<div class="${cls}"><div class="card-body">${inner}</div></div>`;
 }
 
-export function barChart(months = [], { valueKey = 'revenue' } = {}) {
-  const max = Math.max(1, ...months.map((m) => Number(m[valueKey]) || 0));
-  const cols = months.map((m) => {
-    const v = Number(m[valueKey]) || 0;
-    const h = Math.round((v / max) * 100);
-    return `<div class="bar-col" title="${escapeHtml(m.label)}: ${currency(v)}">
-      <div class="bar" style="height:${Math.max(h, 2)}%"></div>
-      <span class="bar-label">${escapeHtml(m.label)}</span>
-    </div>`;
-  }).join('');
-  return `<div class="bars">${cols}</div>`;
+// Alias for backward compatibility with earlier callers.
+export const barChart = svgBarChart;
+
+function paintCount(el, target, format) {
+  const fmt = (n) => (format === 'currency'
+    ? currency(n)
+    : Math.round(n).toLocaleString('en-ZA'));
+  if (reduceMotion() || !Number.isFinite(target) || target === 0) {
+    el.textContent = fmt(target || 0);
+    return;
+  }
+  const duration = 700;
+  const start = performance.now();
+  const tick = (now) => {
+    const p = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmt(target * eased);
+    if (p < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+export function animateCounts(root = document) {
+  root.querySelectorAll('[data-count]').forEach((el) => {
+    if (el.dataset.counted) return;
+    el.dataset.counted = '1';
+    paintCount(el, Number(el.dataset.count) || 0, el.dataset.format || 'number');
+  });
+}
+
+export function initReveal(root = document) {
+  const items = root.querySelectorAll('.reveal:not([data-revealed])');
+  if (!items.length) return;
+  if (reduceMotion() || typeof IntersectionObserver !== 'function') {
+    items.forEach((el) => { el.dataset.revealed = '1'; el.classList.add('is-visible'); });
+    return;
+  }
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('is-visible');
+        entry.target.dataset.revealed = '1';
+        io.unobserve(entry.target);
+      }
+    });
+  }, { rootMargin: '0px 0px -40px 0px', threshold: 0.05 });
+  items.forEach((el) => io.observe(el));
+}
+
+let observer = null;
+export function observeEnhancements() {
+  if (observer || typeof MutationObserver !== 'function' || !document.body) return;
+  let pending = false;
+  observer = new MutationObserver(() => {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(() => {
+      pending = false;
+      animateCounts();
+      initCharts();
+      initReveal();
+    });
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
 }
 
 export function confirmAction(message) {

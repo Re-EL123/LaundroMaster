@@ -1,5 +1,5 @@
 body { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
-.sidebar { background: var(--color-white); border-right: 1px solid var(--color-border); padding: var(--space-6); }
+.sidebar { background: var(--color-panel); border-right: 1px solid var(--color-border); padding: var(--space-6); }
 .brand { font-weight: 800; color: var(--color-primary); font-size: 1.25rem; margin-bottom: var(--space-6); display: inline-flex; align-items: center; gap: var(--space-2); }
 .brand img { height: 1.75rem; width: 1.75rem; border-radius: var(--radius-sm); display: block; }
 .side-nav { display: flex; flex-direction: column; gap: var(--space-2); }
@@ -11,6 +11,4 @@ body { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
 .session-control { gap: var(--space-3); }
 @media (max-width: 1023px) {
   body { grid-template-columns: 1fr; }
-  .sidebar { border-right: 0; border-bottom: 1px solid var(--color-border); }
-  .side-nav { flex-direction: row; flex-wrap: wrap; }
 }
