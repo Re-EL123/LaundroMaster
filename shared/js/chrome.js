@@ -5,12 +5,14 @@ import { wireInstallButton } from './pwa.js';
 
 function customerPaths() {
   const inPages = /\/pages\//.test(location.pathname);
+  const shared = inPages ? '../../../shared' : '../../shared';
   return {
     home: inPages ? '../index.html' : './index.html',
     discover: inPages ? 'discover.html' : './pages/discover.html',
     orders: inPages ? 'orders.html' : './pages/orders.html',
     favorites: inPages ? 'favorites.html' : './pages/favorites.html',
     profile: inPages ? 'profile.html' : './pages/profile.html',
+    icon: `${shared}/assets/app-icon.png?v=8`,
   };
 }
 
@@ -26,7 +28,7 @@ export function mountCustomerHeader(active = '') {
 
   host.innerHTML = `
     <div class="page-shell flex justify-between">
-      <a href="${p.home}" class="brand">LaundroMaster</a>
+      <a href="${p.home}" class="brand"><img src="${p.icon}" alt="" width="28" height="28">LaundroMaster</a>
       <nav class="nav flex" aria-label="Primary">
         ${link('Discover', p.discover, 'discover')}
         ${link('Orders', p.orders, 'orders')}
