@@ -24,11 +24,12 @@
 .portal-hero { max-width: 32rem; animation: portal-up var(--motion-panel) ease-out both; }
 .portal-logo { display: inline-block; line-height: 0; }
 .portal-logo img {
-  width: clamp(9rem, 20vw, 13rem);
+  width: clamp(11rem, 34vw, 18rem);
   height: auto;
   display: block;
   border-radius: var(--radius-lg);
   background: var(--color-white);
+  padding: var(--space-3) var(--space-4);
 }
 .portal-hero h1 {
   margin-top: var(--space-6);
