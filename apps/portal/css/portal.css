@@ -21,8 +21,41 @@
 }
 
 /* ---------- Brand / hero ---------- */
-.portal-hero { max-width: 32rem; animation: portal-up var(--motion-panel) ease-out both; }
-.portal-logo { display: inline-block; line-height: 0; }
+.portal-hero {
+  position: relative;
+  max-width: 36rem;
+  isolation: isolate;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  padding: clamp(1.75rem, 4vw, 3rem);
+  color: #fff;
+  animation: portal-up var(--motion-panel) ease-out both;
+}
+.portal-hero-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -2;
+}
+.portal-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(160deg, rgb(10 12 20 / 0.78), rgb(10 12 20 / 0.55));
+}
+.portal-hero h1,
+.portal-hero .portal-lead { color: #fff; }
+.portal-hero .portal-lead,
+.portal-hero .portal-perks span:not(.perk-check) { color: rgb(255 255 255 / 0.82); }
+.portal-hero .portal-logo img { background: var(--color-white); }
+@media (prefers-reduced-motion: reduce) {
+  .portal-hero-video { display: none; }
+  .portal-hero::after { background: linear-gradient(160deg, rgb(10 12 20 / 0.9), rgb(10 12 20 / 0.75)); }
+}
+.portal-logo { display: inline-block; line-height: 0; position: relative; }
 .portal-logo img {
   width: clamp(11rem, 34vw, 18rem);
   height: auto;
