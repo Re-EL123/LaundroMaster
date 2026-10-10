@@ -25,9 +25,10 @@ import { mountDashboard } from '../../../shared/js/shell.js';
 
   function render(p) {
     const biz = p.laundromats ? escapeHtml(p.laundromats.name) : '';
+    const status = p.status === 'active' && p.ends_at && new Date(p.ends_at).getTime() <= Date.now() ? 'expired' : p.status;
     return `<article class="card">
       <div class="card-body">
-        ${badge(statusLabel(p.status), statusTone(p.status))}
+        ${badge(statusLabel(status), statusTone(status))}
         <h3 class="card-title">${biz}</h3>
         <p class="card-meta">${escapeHtml(p.kind)} &middot; ${currency(p.amount_paid, p.currency)}</p>
         <p class="text-xs text-muted">Ends ${formatDate(p.ends_at)}</p>

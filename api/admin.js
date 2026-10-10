@@ -11,6 +11,7 @@ import {
 import { getSettings, setSettings, num } from './_lib/settings.js';
 import { round2 } from './_lib/pricing.js';
 import { notifyUser, notifyUsers } from './_lib/push.js';
+import { reconcilePromotions } from './_lib/promotions.js';
 
 async function logAdmin(supa, ctx, action, targetType, targetId, detail) {
   try {
@@ -34,6 +35,7 @@ export default createHandler(async function handler(req, res) {
 
   if (req.method === 'GET') {
     if (action === 'stats') {
+      await reconcilePromotions(supa);
       const head = (t, filter) => {
         let r = supa.from(t).select('*', { count: 'exact', head: true });
         if (filter) r = filter(r);
@@ -202,6 +204,7 @@ export default createHandler(async function handler(req, res) {
     }
 
     if (action === 'promotions') {
+      await reconcilePromotions(supa);
       const { data, error } = await supa.from('promotions')
         .select('*, laundromats(id, name), profiles(id, full_name, email)')
         .order('created_at', { ascending: false }).limit(200);
@@ -362,8 +365,13 @@ export default createHandler(async function handler(req, res) {
       if (ends_at) patch.ends_at = ends_at;
       const { data, error } = await supa.from('promotions').update(patch).eq('id', promotion_id).select().single();
       if (error) return res.status(400).json(errorEnvelope(error));
-      if (status !== 'active' && data.laundromat_id) {
-        await supa.from('laundromats').update({ is_featured: false }).eq('id', data.laundromat_id);
+      if (data.laundromat_id) {
+        const now = Date.now();
+        const stillLive = data.ends_at && new Date(data.ends_at).getTime() > now;
+        const featured = status === 'active' && data.kind === 'featured' && stillLive;
+        await supa.from('laundromats')
+          .update({ is_featured: featured, featured_until: featured ? data.ends_at : null })
+          .eq('id', data.laundromat_id);
       }
       await logAdmin(supa, ctx, `promotion.${status}`, 'promotion', promotion_id, patch);
       return res.status(200).json(successEnvelope(data));

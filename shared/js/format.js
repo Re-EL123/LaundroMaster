@@ -84,6 +84,7 @@ const STATUS_LABELS = {
   approved: 'Approved',
   suspended: 'Suspended',
   active: 'Active',
+  expired: 'Expired',
 };
 
 export function statusLabel(status) {

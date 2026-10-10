@@ -4,6 +4,7 @@ import { adminClient } from './_lib/supabase-admin.js';
 import { query, body } from './_lib/req.js';
 import { getUser, isAdmin } from './_lib/auth.js';
 import { favoriteToggle } from './_lib/validation.js';
+import { reconcilePromotions, recordImpressions } from './_lib/promotions.js';
 
 export default createHandler(async function handler(req, res) {
   const q = query(req);
@@ -52,6 +53,7 @@ export default createHandler(async function handler(req, res) {
       return res.status(200).json(successEnvelope(data));
     }
 
+    await reconcilePromotions(supa);
     const limit = Math.min(Number(q.limit) || 20, 100);
     const offset = Math.max(Number(q.offset) || 0, 0);
     const maxPrice = q.max_price != null && q.max_price !== '' ? Number(q.max_price) : null;
@@ -72,6 +74,9 @@ export default createHandler(async function handler(req, res) {
     else request = request.order('is_featured', { ascending: false }).order('rating_average', { ascending: false });
     const { data, error } = await request;
     if (error) return res.status(500).json(errorEnvelope(error));
+    if (sort === 'featured') {
+      await recordImpressions(supa, (data || []).filter((l) => l.is_featured).map((l) => l.id));
+    }
     return res.status(200).json(successEnvelope(data || []));
   }
 
@@ -99,6 +104,7 @@ export default createHandler(async function handler(req, res) {
         .select('id, clicks')
         .eq('laundromat_id', laundromat_id)
         .eq('status', 'active')
+        .gt('ends_at', new Date().toISOString())
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();

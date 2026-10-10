@@ -9,6 +9,7 @@ import {
 } from './_lib/validation.js';
 import { getSettings, num } from './_lib/settings.js';
 import { round2, activeSubscription, defaultPlan } from './_lib/pricing.js';
+import { reconcilePromotions } from './_lib/promotions.js';
 
 const OWNER_ROLES = ['owner', 'admin', 'super_admin'];
 
@@ -210,6 +211,7 @@ export default createHandler(async function handler(req, res) {
     }
 
     if (action === 'promotions') {
+      await reconcilePromotions(supa);
       const { data, error } = await supa.from('promotions').select('*, laundromats(id, name, view_count)').eq('owner_id', ctx.user.id).order('created_at', { ascending: false });
       if (error) return res.status(500).json(errorEnvelope(error));
       const rows = data || [];
