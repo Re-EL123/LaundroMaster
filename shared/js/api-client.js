@@ -1,4 +1,4 @@
-import { getSession, setSession, clearSession } from './auth-client.js';
+import { getSession, refreshSession } from './auth-client.js';
 
 function base() {
   return (typeof window !== 'undefined' && window.API_BASE) || '/api';
@@ -21,24 +21,8 @@ async function call(path, { method = 'GET', body = null, headers = {}, auth = tr
 }
 
 async function tryRefresh() {
-  const session = getSession();
-  if (!session || !session.refresh_token) return false;
-  const { res, data } = await call('/auth?action=refresh', {
-    method: 'POST',
-    body: { refresh_token: session.refresh_token },
-    auth: false,
-  });
-  if (res.ok && data && data.data && data.data.access_token) {
-    setSession({
-      access_token: data.data.access_token,
-      refresh_token: data.data.refresh_token,
-      user: data.data.user,
-      role: data.data.role,
-    });
-    return true;
-  }
-  clearSession();
-  return false;
+  const next = await refreshSession();
+  return Boolean(next);
 }
 
 export async function apiRequest(path, options = {}) {

@@ -3,6 +3,7 @@ import { successEnvelope, errorEnvelope, ApiError } from './_lib/errors.js';
 import { adminClient } from './_lib/supabase-admin.js';
 import { query } from './_lib/req.js';
 import { requireRoles } from './_lib/auth.js';
+import { memberLaundromatIds } from './owner.js';
 
 export default createHandler(async function handler(req, res) {
   const q = query(req);
@@ -14,8 +15,7 @@ export default createHandler(async function handler(req, res) {
 
   let bookingQuery = supa.from('bookings').select('status, total_amount, created_at, laundromat_id');
   if (!isAdminScope) {
-    const { data: mines } = await supa.from('laundromats').select('id').eq('owner_id', ctx.user.id);
-    const ids = (mines || []).map((m) => m.id);
+    const ids = await memberLaundromatIds(supa, ctx);
     if (!ids.length) return res.status(200).json(successEnvelope({ byStatus: {}, revenue: 0, count: 0, recent: [] }));
     bookingQuery = bookingQuery.in('laundromat_id', ids);
   }

@@ -106,25 +106,40 @@ export async function logout() {
   clearSession();
 }
 
+// Single-flight session refresh shared by the API client and me() so concurrent
+// 401s never trigger two refresh calls with the same (rotating) refresh token.
+let refreshPromise = null;
+
+export function refreshSession() {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    const s = getSession();
+    if (!s || !s.refresh_token) return null;
+    const { ok, status, data } = await raw('/auth?action=refresh', { method: 'POST', body: { refresh_token: s.refresh_token } });
+    if (ok && data && data.data && data.data.access_token) {
+      const next = {
+        access_token: data.data.access_token,
+        refresh_token: data.data.refresh_token,
+        user: data.data.user,
+        role: data.data.role,
+      };
+      setSession(next);
+      return next;
+    }
+    if (status === 400 || status === 401 || status === 403) clearSession();
+    return null;
+  })().finally(() => { refreshPromise = null; });
+  return refreshPromise;
+}
+
 export async function me() {
   const s = getSession();
   if (!s || !s.access_token) return null;
   let r = await raw('/auth?action=me', { token: s.access_token });
   if (r.status === 401 && s.refresh_token) {
-    const refreshed = await raw('/auth?action=refresh', { method: 'POST', body: { refresh_token: s.refresh_token } });
-    if (refreshed.ok) {
-      const next = {
-        access_token: refreshed.data.data.access_token,
-        refresh_token: refreshed.data.data.refresh_token,
-        user: refreshed.data.data.user,
-        role: refreshed.data.data.role,
-      };
-      setSession(next);
-      r = await raw('/auth?action=me', { token: next.access_token });
-    } else {
-      clearSession();
-      return null;
-    }
+    const next = await refreshSession();
+    if (!next) return null;
+    r = await raw('/auth?action=me', { token: next.access_token });
   }
   if (!r.ok) return null;
   return r.data.data;

@@ -61,7 +61,8 @@ export default createHandler(async function handler(req, res) {
       .select(select)
       .eq('verification_status', 'approved')
       .range(offset, offset + limit - 1);
-    if (q.q) request = request.or(`name.ilike.%${q.q}%,address.ilike.%${q.q}%,description.ilike.%${q.q}%`);
+    const term = q.q ? String(q.q).replace(/[,()\\*]/g, ' ').trim().slice(0, 80) : '';
+    if (term) request = request.or(`name.ilike.%${term}%,address.ilike.%${term}%,description.ilike.%${term}%`);
     if (q.min_rating) request = request.gte('rating_average', Number(q.min_rating));
     if (maxPrice != null) request = request.lte('services.base_price', maxPrice).eq('services.is_active', true);
     const sort = q.sort || 'featured';

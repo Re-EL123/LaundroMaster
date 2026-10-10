@@ -66,4 +66,14 @@ export function wireInstallButton(button, { hideWhenUnavailable = true } = {}) {
 if (typeof window !== 'undefined') {
   if (document.readyState === 'complete') register();
   else window.addEventListener('load', register);
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    listeners.forEach((fn) => fn(true));
+  });
+  window.addEventListener('appinstalled', () => {
+    deferredPrompt = null;
+    listeners.forEach((fn) => fn(false));
+  });
 }

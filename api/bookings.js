@@ -103,7 +103,9 @@ async function awardCompletion(supa, booking) {
       { user_id: ref.referrer_id, points: 100, reason: 'referral_bonus', booking_id: null },
       { user_id: booking.customer_id, points: 50, reason: 'referral_welcome', booking_id: booking.id },
     ]);
-    await supa.from('profiles').update({ credit_balance: 50 }).eq('id', booking.customer_id);
+    const { data: profile } = await supa.from('profiles').select('credit_balance').eq('id', booking.customer_id).maybeSingle();
+    const currentCredit = Number(profile && profile.credit_balance) || 0;
+    await supa.from('profiles').update({ credit_balance: currentCredit + 50 }).eq('id', booking.customer_id);
     await notifyUser(supa, ref.referrer_id, {
       type: 'referral_reward',
       title: 'You earned referral points',
@@ -126,16 +128,18 @@ export default createHandler(async function handler(req, res) {
       const booking = await loadBooking(supa, q.id);
       const permitted = await canAccessBooking(supa, ctx, booking);
       if (!permitted) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'You do not have access to this booking', 403)));
-      const [{ data: payment }, { data: history }, { data: messages }] = await Promise.all([
+      const [{ data: payment }, { data: history }, { data: messages }, { data: refunds }] = await Promise.all([
         supa.from('payments').select('*').eq('booking_id', booking.id).order('created_at', { ascending: false }),
         supa.from('booking_status_history').select('*').eq('booking_id', booking.id).order('created_at', { ascending: true }),
         supa.from('booking_messages').select('id, sender_id, sender_role, body, created_at').eq('booking_id', booking.id).order('created_at', { ascending: true }),
+        supa.from('refunds').select('*').eq('booking_id', booking.id).order('created_at', { ascending: false }).limit(1),
       ]);
       const myPayment = (payment || [])[0] || null;
+      const refund = (refunds || [])[0] || null;
       if (!isAdmin(ctx) && booking.customer_id !== ctx.user.id) {
         // Owners/staff do not see internal payout internals; keep booking row but strip nothing sensitive here.
       }
-      return res.status(200).json(successEnvelope({ ...booking, payment: myPayment, history: history || [], messages: messages || [] }));
+      return res.status(200).json(successEnvelope({ ...booking, payment: myPayment, refund, history: history || [], messages: messages || [] }));
     }
 
     if (action === 'messages') {

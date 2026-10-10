@@ -1,4 +1,5 @@
 .page-shell { width: min(100% - 2rem, 80rem); margin-inline: auto; }
+.main { min-width: 0; }
 .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
 .toolbar { display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: flex-end; margin-bottom: var(--space-6); }
 .table-wrap { overflow-x: auto; }

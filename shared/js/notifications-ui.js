@@ -123,7 +123,8 @@ export async function mountNotifications(host) {
 
   host.addEventListener('click', (e) => e.stopPropagation());
   bell.addEventListener('click', () => open());
-  document.addEventListener('click', () => open(false));
+  const onDocClick = () => open(false);
+  document.addEventListener('click', onDocClick);
 
   host.querySelector('[data-pref="sound"]').addEventListener('change', (e) => setPrefs({ sound: e.target.checked }));
   host.querySelector('[data-pref="volume"]').addEventListener('input', (e) => setPrefs({ volume: Number(e.target.value) }));
@@ -206,5 +207,11 @@ export async function mountNotifications(host) {
   const timer = setInterval(load, 30000);
 
   syncPushButton();
-  return { refresh: load, destroy: () => clearInterval(timer) };
+  return {
+    refresh: load,
+    destroy: () => {
+      clearInterval(timer);
+      document.removeEventListener('click', onDocClick);
+    },
+  };
 }

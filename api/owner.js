@@ -23,7 +23,7 @@ async function ownerLaundromatIds(supa, ctx) {
 }
 
 // Laundromats the user owns or is a member of — for read-only views.
-async function memberLaundromatIds(supa, ctx) {
+export async function memberLaundromatIds(supa, ctx) {
   const owned = await ownerLaundromatIds(supa, ctx);
   const { data } = await supa.from('laundromat_members').select('laundromat_id').eq('user_id', ctx.user.id);
   const memberIds = (data || []).map((r) => r.laundromat_id);

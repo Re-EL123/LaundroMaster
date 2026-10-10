@@ -15,7 +15,13 @@ export async function getUser(req) {
   if (!token) return { user: null, roles: [], role: null, admin };
   const { data, error } = await admin.auth.getUser(token);
   if (error || !data || !data.user) return { user: null, roles: [], role: null, admin };
-  const { data: roleRows } = await admin.from('user_roles').select('role').eq('user_id', data.user.id);
+  const [{ data: roleRows }, { data: profile }] = await Promise.all([
+    admin.from('user_roles').select('role').eq('user_id', data.user.id),
+    admin.from('profiles').select('account_status').eq('id', data.user.id).maybeSingle(),
+  ]);
+  if (profile && profile.account_status && profile.account_status !== 'active') {
+    return { user: null, roles: [], role: null, admin };
+  }
   const roles = (roleRows || []).map((r) => r.role);
   return { user: data.user, roles, role: topRole(roles), admin };
 }

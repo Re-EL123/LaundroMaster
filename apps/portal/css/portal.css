@@ -80,7 +80,6 @@
 
 .portal-perks { list-style: none; margin-top: var(--space-8); display: grid; gap: var(--space-3); }
 .portal-perks li { display: flex; gap: var(--space-3); align-items: flex-start; }
-.portal-perks div { display: flex; flex-direction: column; gap: 0.1rem; }
 .portal-perks strong { font-weight: 700; }
 .portal-perks span:not(.perk-check) { color: var(--color-muted); font-size: 0.925rem; }
 .perk-check {

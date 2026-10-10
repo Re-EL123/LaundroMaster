@@ -88,7 +88,8 @@ export function statTile({ label, value, hint, tone = '', href } = {}) {
   const inner = `<span class="text-muted text-xs">${escapeHtml(label || '')}</span>
     <span class="stat-value">${escapeHtml(String(value == null ? '' : value))}</span>
     ${hint ? `<span class="text-xs text-muted">${escapeHtml(hint)}</span>` : ''}`;
-  const cls = `card stat-tile${tone ? ` is-${tone}` : ''}`;
+  const safeTone = tone === 'warn' ? 'warning' : tone;
+  const cls = `card stat-tile${safeTone ? ` is-${safeTone}` : ''}`;
   return href
     ? `<a class="${cls}" href="${escapeHtml(href)}"><div class="card-body">${inner}</div></a>`
     : `<div class="${cls}"><div class="card-body">${inner}</div></div>`;

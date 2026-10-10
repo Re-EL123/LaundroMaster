@@ -113,7 +113,7 @@ function renderPlus(subscription, plans) {
   const cards = plans.map((p) => {
     const features = Array.isArray(p.features) ? p.features : [];
     const current = active && subscription.plan_id === p.id;
-    return `<div class="card-body">
+    return `<div class="card"><div class="card-body">
       ${current ? badge('Active', 'success') : ''}
       <h3 class="card-title">${escapeHtml(p.name)}</h3>
       <p class="stat-value">${currency(p.price_monthly, p.currency)}<span class="text-sm text-muted">/mo</span></p>
@@ -121,9 +121,9 @@ function renderPlus(subscription, plans) {
       ${current
         ? '<button class="btn btn-secondary" id="cancelPlus" type="button">Cancel membership</button>'
         : `<button class="btn btn-primary" data-plan="${p.id}" type="button">Join ${escapeHtml(p.name)}</button>`}
-    </div>`;
+    </div></div>`;
   }).join('');
-  plusCard.innerHTML = `<div class="card">${cards}</div>`;
+  plusCard.innerHTML = `<div class="card-grid">${cards}</div>`;
 }
 
 async function loadPlus() {

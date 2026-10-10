@@ -12,7 +12,7 @@ function customerPaths() {
     orders: inPages ? 'orders.html' : './pages/orders.html',
     favorites: inPages ? 'favorites.html' : './pages/favorites.html',
     profile: inPages ? 'profile.html' : './pages/profile.html',
-    icon: `${shared}/assets/app-icon.png?v=8`,
+    icon: `${shared}/assets/app-icon.png?v=9`,
   };
 }
 

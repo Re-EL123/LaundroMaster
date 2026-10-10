@@ -40,7 +40,7 @@ export async function uploadImage(file, { bucket = 'laundromat-media', prefix = 
   const cleanPrefix = prefix ? `${prefix.replace(/^\/|\/$/g, '')}/` : '';
   const path = `${cleanPrefix}${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension(file.name)}`;
 
-  const { data } = await api.post('/uploads', { bucket, path, filename: file.name });
+  const { data } = await api.post('/uploads?action=sign', { bucket, path, filename: file.name });
   const put = await fetch(data.signed_url, {
     method: 'PUT',
     headers: { 'Content-Type': file.type, 'x-upsert': 'true' },

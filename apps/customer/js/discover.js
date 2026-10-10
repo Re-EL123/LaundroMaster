@@ -14,6 +14,8 @@ const maxPrice = document.getElementById('max_price');
 const resultCount = document.getElementById('resultCount');
 const sortBar = document.getElementById('sortBar');
 input.value = param('q') || '';
+if (minRating) minRating.value = param('min_rating') || '';
+if (maxPrice) maxPrice.value = param('max_price') || '';
 let sort = param('sort') || 'featured';
 sortBar.querySelectorAll('[data-sort]').forEach((chip) => {
   chip.classList.toggle('is-active', chip.dataset.sort === sort);
@@ -34,6 +36,8 @@ function syncUrl() {
   const url = new URL(location.href);
   const v = input.value.trim();
   if (v) url.searchParams.set('q', v); else url.searchParams.delete('q');
+  if (minRating.value) url.searchParams.set('min_rating', minRating.value); else url.searchParams.delete('min_rating');
+  if (maxPrice.value) url.searchParams.set('max_price', maxPrice.value); else url.searchParams.delete('max_price');
   url.searchParams.set('sort', sort);
   history.replaceState(null, '', url);
 }

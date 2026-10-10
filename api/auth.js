@@ -121,6 +121,10 @@ export default createHandler(async function handler(req, res) {
       if (!refresh_token) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing refresh_token')));
       const { data, error } = await anon.auth.refreshSession({ refresh_token });
       if (error || !data.session) return res.status(401).json(errorEnvelope(new ApiError('UNAUTHORIZED', 'Could not refresh session', 401)));
+      const { data: profile } = await admin.from('profiles').select('account_status').eq('id', data.user.id).maybeSingle();
+      if (profile && profile.account_status !== 'active') {
+        return res.status(403).json(errorEnvelope(new ApiError('ACCOUNT_SUSPENDED', 'This account is not active', 403)));
+      }
       const role = await resolveRole(admin, data.user.id);
       return res.status(200).json(successEnvelope({
         access_token: data.session.access_token,

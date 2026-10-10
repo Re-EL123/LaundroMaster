@@ -49,21 +49,6 @@ async function loadMembership() {
   } catch { /* defaults */ }
 }
 
-function currentTotals() {
-  let subtotal = 0;
-  const rows = selection.map((item) => {
-    const svc = servicesById.get(item.service_id);
-    const price = svc ? Number(svc.base_price) || 0 : 0;
-    const line = price * item.quantity;
-    subtotal += line;
-    return { name: svc ? svc.name : item.service_id, quantity: item.quantity, line };
-  });
-  const deliveryRequired = document.getElementById('delivery_required').checked;
-  const pickupRequired = document.getElementById('pickup_required').checked;
-  const chargeDelivery = (deliveryFee > 0 && (deliveryCheck()) && !hasPlus);
-  return { rows, subtotal, deliveryCharge: deliveryFee, waived: hasPlus && deliveryRequired, charged: deliveryRequired ? 0 : 0 };
-}
-
 function renderSummary() {
   if (!selection.length) {
     summaryEl.innerHTML = '<p class="error">No services selected. Please pick services from the laundromat page.</p>';

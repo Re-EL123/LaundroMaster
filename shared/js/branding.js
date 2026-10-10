@@ -115,8 +115,7 @@ function wireSave(card, id, state) {
     button.disabled = true;
     try {
       const { api } = await import('./api-client.js');
-      await api.post('/owner', {
-        action: 'laundromat-update',
+      await api.post('/owner?action=laundromat-update', {
         laundromat_id: id,
         name: val('name'),
         description: val('description'),

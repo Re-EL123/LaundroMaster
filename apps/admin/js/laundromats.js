@@ -44,7 +44,7 @@ import { mountDashboard } from '../../../shared/js/shell.js';
     if (!btn) return;
     btn.disabled = true;
     const status = btn.dataset.status;
-    let reason = `Marked ${status} by ${user.email}`;
+    let reason = `Marked ${status} by ${(user.user && user.user.email) || 'admin'}`;
     if (status !== 'approved') {
       reason = window.prompt('Reason (recorded in the audit log):', reason) || reason;
     }

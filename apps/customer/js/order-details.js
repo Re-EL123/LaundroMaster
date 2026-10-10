@@ -36,7 +36,6 @@ function printReceipt(b) {
 
 function messagesPanel(b) {
   const messages = (b.messages || []).map((m) => {
-    const own = m.sender_id === undefined ? false : true;
     return `<div class="chat-line ${m.sender_role === 'customer' ? 'is-out' : 'is-in'}">
       <span class="chat-meta">${escapeHtml(m.sender_role === 'customer' ? 'you' : 'laundry')} · ${escapeHtml(relativeTime(m.created_at))}</span>
       <p class="chat-body">${escapeHtml(m.body)}</p>
@@ -101,13 +100,9 @@ function renderBooking(b) {
   const canPay = b.status === 'pending_payment';
   const amountDue = Number(b.total_amount) || 0;
 
-  const address = (a) => (a && (a.line1 || a.address)) ? `<p class="text-sm text-muted">${escapeHtml(b.pickup_required ? 'Pickup' : 'Delivery')}: ${escapeHtml(a.line1 || a.address || '')}</p>` : '';
-  const pickup = b.pickup_required ? `<p class="text-sm text-muted">Pickup: ${escapeHtml((b.pickup_address && b.pickup_address.line1) || '—')}</p>` : '';
-  const delivery = b.delivery_required ? `<p class="text-sm text-muted">Delivery: ${escapeHtml((b.delivery_address && b.delivery_address.line1) || '—')}</p>` : '';
+  const pickup = b.pickup_required ? `<p class="text-sm text-muted">Pickup: ${escapeHtml((b.pickup_address && (b.pickup_address.line1 || b.pickup_address.address)) || '—')}</p>` : '';
+  const delivery = b.delivery_required ? `<p class="text-sm text-muted">Delivery: ${escapeHtml((b.delivery_address && (b.delivery_address.line1 || b.delivery_address.address)) || '—')}</p>` : '';
 
-  const paymentLine = b.payment
-    ? `<div class="breakdown-row is-sub"><span>Payment</span><span>${escapeHtml(statusLabel(b.payment.status))} · ${escapeHtml(b.payment.provider || '')}</span></div>`
-    : '';
   const refundNote = b.refund
     ? `<p class="text-sm">Refund ${escapeHtml(statusLabel(b.refund.status))} · ${currency(b.refund.amount)}</p>`
     : '';
@@ -134,8 +129,11 @@ function renderBooking(b) {
         ], { total: currency(b.total_amount) })}
 
         ${b.scheduled_at ? `<p class="text-sm text-muted">Scheduled: ${formatDate(b.scheduled_at)}</p>` : ''}
+        ${pickup}
+        ${delivery}
         ${b.customer_notes ? `<p class="text-sm text-muted">Notes: ${escapeHtml(b.customer_notes)}</p>` : ''}
         ${b.payment ? `<p class="text-xs text-muted">Payment: ${escapeHtml(statusLabel(b.payment.status))}${b.refund ? ` · Refund: ${escapeHtml(statusLabel(b.refund.status))}` : ''}</p>` : ''}
+        ${refundNote}
         <p class="text-xs text-muted">Placed ${formatDate(b.created_at)}</p>
 
         ${messagesPanel(b)}
