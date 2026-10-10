@@ -1,5 +1,5 @@
 /* LaundroMaster service worker: offline support + Web Push. */
-const VERSION = 'v10';
+const VERSION = 'v11';
 const CACHE = `lm-static-${VERSION}`;
 const SCOPE = self.registration.scope;
 

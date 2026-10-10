@@ -5,27 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#D90429">
   <script>(function(){try{var t=localStorage.getItem('lm_theme');if(t!=='dark'&&t!=='light'){t=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',t==='dark'?'#0B0B0D':'#D90429');}catch(e){}})();</script>
-  <link rel="icon" href="../../../shared/assets/favicon-32.png?v=10">
-  <link rel="apple-touch-icon" href="../../../shared/assets/apple-touch-icon.png?v=10">
+  <link rel="icon" href="../../../shared/assets/favicon-32.png?v=11">
+  <link rel="apple-touch-icon" href="../../../shared/assets/apple-touch-icon.png?v=11">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="LaundroMaster">
   <link rel="manifest" href="../manifest.webmanifest">
   <title>Admin Laundromats - LaundroMaster</title>
-  <link rel="stylesheet" href="../../../shared/css/tokens.css?v=10">
-  <link rel="stylesheet" href="../../../shared/css/reset.css?v=10">
-  <link rel="stylesheet" href="../../../shared/css/layout.css?v=10">
-  <link rel="stylesheet" href="../../../shared/css/buttons.css?v=10">
-  <link rel="stylesheet" href="../../../shared/css/cards.css?v=10">
-  <link rel="stylesheet" href="../../../shared/css/forms.css?v=10">
-  <link rel="stylesheet" href="../../../shared/css/utilities.css?v=10">
-  <link rel="stylesheet" href="../../../shared/css/motion.css?v=10">
-  <link rel="stylesheet" href="../css/admin.css?v=10">
+  <link rel="stylesheet" href="../../../shared/css/tokens.css?v=11">
+  <link rel="stylesheet" href="../../../shared/css/reset.css?v=11">
+  <link rel="stylesheet" href="../../../shared/css/layout.css?v=11">
+  <link rel="stylesheet" href="../../../shared/css/buttons.css?v=11">
+  <link rel="stylesheet" href="../../../shared/css/cards.css?v=11">
+  <link rel="stylesheet" href="../../../shared/css/forms.css?v=11">
+  <link rel="stylesheet" href="../../../shared/css/utilities.css?v=11">
+  <link rel="stylesheet" href="../../../shared/css/motion.css?v=11">
+  <link rel="stylesheet" href="../css/admin.css?v=11">
 </head>
 <body data-admin-action="laundromats">
   <aside class="sidebar">
-    <a class="brand" href="../index.html"><img src="../../../shared/assets/app-icon.png?v=10" alt="" width="28" height="28">LM Admin</a>
+    <a class="brand" href="../index.html"><img src="../../../shared/assets/app-icon.png?v=11" alt="" width="28" height="28">LM Admin</a>
     <nav class="side-nav">
       <a href="../index.html">Dashboard</a>
       <a href="laundromats.html">Laundromats</a>
@@ -48,10 +48,18 @@
       <div id="notifMount" class="session-control"></div>
     </header>
     <div class="page-shell content">
+      <div id="detail" class="mb-3"></div>
+      <div class="toolbar" id="filterBar" role="group" aria-label="Filter by verification status">
+        <button type="button" class="chip is-active" data-filter="">All</button>
+        <button type="button" class="chip" data-filter="pending">Pending</button>
+        <button type="button" class="chip" data-filter="approved">Approved</button>
+        <button type="button" class="chip" data-filter="rejected">Rejected</button>
+        <button type="button" class="chip" data-filter="suspended">Suspended</button>
+      </div>
       <div class="card-grid" id="list"></div>
     </div>
   </main>
-  <script src="../js/config.js?v=10"></script>
-  <script type="module" src="../js/laundromats.js?v=10"></script>
+  <script src="../js/config.js?v=11"></script>
+  <script type="module" src="../js/laundromats.js?v=11"></script>
 </body>
 </html>
