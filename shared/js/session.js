@@ -1,6 +1,7 @@
 // Session UI helpers: mount a sign-out control and current-user label.
 import { getSession, logout, portalUrl } from './auth-client.js';
 import { cacheClear } from './cache.js';
+import { icon } from './icons.js';
 
 export function currentUser() {
   const s = getSession();
@@ -20,10 +21,10 @@ export function mountSignOut(container, { redirect = true } = {}) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'btn btn-secondary';
-  btn.textContent = 'Sign out';
+  btn.innerHTML = `${icon('log-out', { size: 16 })}<span>Sign out</span>`;
   btn.addEventListener('click', async () => {
     btn.disabled = true;
-    btn.textContent = 'Signing out…';
+    btn.innerHTML = `<span>Signing out…</span>`;
     cacheClear();
     await logout();
     if (redirect) location.href = portalUrl();

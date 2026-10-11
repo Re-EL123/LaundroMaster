@@ -1,5 +1,6 @@
 // Theme (light/dark) controller. The preferred theme is booted inline in <head>
 // to avoid a flash of the wrong theme; this module keeps it in sync + renders toggles.
+import { icon } from './icons.js';
 
 const KEY = 'lm_theme';
 
@@ -43,7 +44,7 @@ export function mountThemeToggle(container, { compact = true } = {}) {
 
   const render = () => {
     const dark = getTheme() === 'dark';
-    btn.textContent = dark ? '☀' : '☾';
+    btn.innerHTML = icon(dark ? 'sun' : 'moon', { size: 18 });
     btn.setAttribute('aria-pressed', String(dark));
     btn.setAttribute('title', dark ? 'Switch to light mode' : 'Switch to dark mode');
   };

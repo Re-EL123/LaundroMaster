@@ -64,10 +64,10 @@ const FIX_META = {
 
   function paintStats(stats) {
     statsEl.innerHTML = [
-      statTile({ label: 'Needs action', value: stats.pending, href: 'pages/bookings.html?status=pending_acceptance', tone: stats.pending ? 'warning' : '', animate: true }),
-      statTile({ label: 'In progress', value: stats.active, href: 'pages/bookings.html', animate: true }),
-      statTile({ label: 'Completed', value: stats.completed, animate: true }),
-      statTile({ label: 'Net earnings', value: stats.net, format: 'currency', hint: `Rating ${stats.rating || '—'} · ${stats.repeat_rate}% repeat`, href: 'pages/earnings.html', tone: 'success', animate: true }),
+      statTile({ label: 'Needs action', value: stats.pending, href: 'pages/bookings.html?status=pending_acceptance', tone: stats.pending ? 'warning' : '', animate: true, icon: 'alert-triangle' }),
+      statTile({ label: 'In progress', value: stats.active, href: 'pages/bookings.html', animate: true, icon: 'loader-circle' }),
+      statTile({ label: 'Completed', value: stats.completed, animate: true, icon: 'circle-check' }),
+      statTile({ label: 'Net earnings', value: stats.net, format: 'currency', hint: `Rating ${stats.rating || '—'} · ${stats.repeat_rate}% repeat`, href: 'pages/earnings.html', tone: 'success', animate: true, icon: 'wallet' }),
     ].join('');
     animateCounts(statsEl);
   }

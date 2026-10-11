@@ -3,8 +3,10 @@ import { mountSignOut } from './session.js';
 import { mountNotifications } from './notifications-ui.js';
 import { wireInstallButton } from './pwa.js';
 import { initTheme, mountThemeToggle } from './theme.js';
+import { icon } from './icons.js';
 import { wirePrefetch } from './prefetch.js';
 import { observeEnhancements } from './ui.js';
+import { decorateAll, mountSidebarCollapse } from './nav.js';
 import './components.js';
 
 function mountNavToggle() {
@@ -20,7 +22,7 @@ function mountNavToggle() {
   btn.setAttribute('aria-label', 'Open navigation menu');
   btn.setAttribute('aria-expanded', 'false');
   btn.setAttribute('aria-controls', sidebar.id);
-  btn.innerHTML = '<span aria-hidden="true">☰</span>';
+  btn.innerHTML = icon('menu', { size: 20 });
   topbar.insertBefore(btn, topbar.firstChild);
 
   const backdrop = document.createElement('button');
@@ -84,7 +86,7 @@ export async function mountDashboard({ allowed, sidebarSelector = '.side-nav' } 
     btn.type = 'button';
     btn.className = 'btn btn-secondary install-app-btn';
     btn.hidden = true;
-    btn.textContent = 'Install';
+    btn.innerHTML = `${icon('download', { size: 16 })}<span>Install</span>`;
     actions.appendChild(btn);
     wireInstallButton(btn);
 
@@ -94,6 +96,8 @@ export async function mountDashboard({ allowed, sidebarSelector = '.side-nav' } 
   }
 
   mountNavToggle();
+  decorateAll();
+  mountSidebarCollapse();
   wirePrefetch();
   observeEnhancements();
   return user;

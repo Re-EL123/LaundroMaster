@@ -5,6 +5,8 @@ import { wireInstallButton } from './pwa.js';
 import { initTheme, mountThemeToggle } from './theme.js';
 import { wirePrefetch } from './prefetch.js';
 import { observeEnhancements } from './ui.js';
+import { icon } from './icons.js';
+import { decorateNav, decorateButtons } from './nav.js';
 import { cacheClear } from './cache.js';
 import './components.js';
 
@@ -17,7 +19,7 @@ function customerPaths() {
     orders: inPages ? 'orders.html' : './pages/orders.html',
     favorites: inPages ? 'favorites.html' : './pages/favorites.html',
     profile: inPages ? 'profile.html' : './pages/profile.html',
-    icon: `${shared}/assets/app-icon.png?v=18`,
+    icon: `${shared}/assets/app-icon.png?v=19`,
   };
 }
 
@@ -65,7 +67,7 @@ export function mountCustomerHeader(active = '') {
   const installBtn = document.createElement('button');
   installBtn.type = 'button';
   installBtn.className = 'btn btn-secondary';
-  installBtn.textContent = 'Install';
+  installBtn.innerHTML = `${icon('download', { size: 16 })}<span>Install</span>`;
   installBtn.hidden = true;
   wireInstallButton(installBtn);
 
@@ -75,6 +77,8 @@ export function mountCustomerHeader(active = '') {
   mountThemeToggle(actions);
   host.querySelector('.page-shell')?.appendChild(actions);
 
+  decorateNav(host, '.nav a:not(.btn)');
+  decorateButtons(host);
   wirePrefetch();
   observeEnhancements();
 }

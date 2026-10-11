@@ -18,10 +18,10 @@ import { mountDashboard } from '../../../shared/js/shell.js';
       const { data } = await api.get(`/admin?action=payments${q}`);
       const { payments, totals } = data;
       stats.innerHTML = [
-        statTile({ label: 'Collected', value: currency(totals.collected), tone: 'success' }),
-        statTile({ label: 'Refunded', value: currency(totals.refunded), tone: 'warn' }),
-        statTile({ label: 'Pending', value: totals.pending }),
-        statTile({ label: 'Failed', value: totals.failed, tone: 'danger' }),
+        statTile({ label: 'Collected', value: currency(totals.collected), tone: 'success', icon: 'circle-dollar-sign' }),
+        statTile({ label: 'Refunded', value: currency(totals.refunded), tone: 'warn', icon: 'rotate-ccw' }),
+        statTile({ label: 'Pending', value: totals.pending, icon: 'clock' }),
+        statTile({ label: 'Failed', value: totals.failed, tone: 'danger', icon: 'circle-alert' }),
       ].join('');
       if (!payments.length) return emptyState(list, 'No payments found.');
       list.innerHTML = payments.map(render).join('');

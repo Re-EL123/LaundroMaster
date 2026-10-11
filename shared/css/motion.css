@@ -17,4 +17,27 @@
 .stagger > *:nth-child(n+7) { animation-delay: 240ms; }
 @keyframes card-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
+/* Page + navigation entrance */
+@keyframes page-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes nav-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+.content { animation: page-rise var(--motion-panel) ease both; }
+.side-nav .nav-item { animation: nav-in 320ms ease both; }
+.side-nav .nav-item:nth-child(1) { animation-delay: 20ms; }
+.side-nav .nav-item:nth-child(2) { animation-delay: 50ms; }
+.side-nav .nav-item:nth-child(3) { animation-delay: 80ms; }
+.side-nav .nav-item:nth-child(4) { animation-delay: 110ms; }
+.side-nav .nav-item:nth-child(5) { animation-delay: 140ms; }
+.side-nav .nav-item:nth-child(6) { animation-delay: 170ms; }
+.side-nav .nav-item:nth-child(7) { animation-delay: 200ms; }
+.side-nav .nav-item:nth-child(8) { animation-delay: 230ms; }
+.side-nav .nav-item:nth-child(n+9) { animation-delay: 260ms; }
+
+/* Interactive card lift + theme toggle flourish */
+@media (hover: hover) and (pointer: fine) {
+  .stat-tile, a.card { transition: transform var(--motion-base) ease, box-shadow var(--motion-base) ease, border-color var(--motion-base) ease; }
+  .stat-tile:hover, a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow-popover); }
+}
+.theme-toggle .icon { transition: transform var(--motion-panel) cubic-bezier(0.22, 1, 0.36, 1); }
+.theme-toggle:hover .icon { transform: rotate(-18deg) scale(1.05); }
+
 @media (prefers-reduced-motion: reduce) { .skeleton::after { animation: none; } .stagger > * { animation: none; } .reveal { opacity: 1; transform: none; transition: none; } *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }

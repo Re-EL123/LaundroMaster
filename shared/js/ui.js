@@ -1,5 +1,7 @@
 import { escapeHtml, currency } from './format.js';
 import { sparkline, barChart as svgBarChart, initCharts } from './charts.js';
+import { icon, mountIcons } from './icons.js';
+import { decorateAll } from './nav.js';
 
 const reduceMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -10,19 +12,21 @@ export function skeleton(el, rows = 3, height = 160) {
     .join('');
 }
 
-export function emptyState(el, message) {
+export function emptyState(el, message, { icon: iconName = 'inbox' } = {}) {
   if (!el) return;
-  el.innerHTML = `<p class="text-muted">${escapeHtml(message)}</p>`;
+  el.innerHTML = `<div class="empty-state">${icon(iconName, { size: 30 })}<p class="text-muted">${escapeHtml(message)}</p></div>`;
 }
 
 export function errorState(el, message) {
   if (!el) return;
-  el.innerHTML = `<p class="error">${escapeHtml(message)}</p>`;
+  el.innerHTML = `<div class="empty-state is-error">${icon('alert-triangle', { size: 30 })}<p class="error">${escapeHtml(message)}</p></div>`;
 }
 
 export function badge(text, tone = 'info') {
   return `<span class="badge badge-${tone}">${escapeHtml(text)}</span>`;
 }
+
+const TOAST_ICON = { info: 'info', success: 'circle-check', warning: 'alert-triangle', error: 'circle-alert', danger: 'circle-alert' };
 
 export function toast(message, tone = 'info', timeout = 4000) {
   let host = document.getElementById('toastHost');
@@ -35,7 +39,10 @@ export function toast(message, tone = 'info', timeout = 4000) {
   const node = document.createElement('div');
   node.className = `toast toast-${tone}`;
   node.setAttribute('role', 'status');
-  node.textContent = message;
+  node.innerHTML = icon(TOAST_ICON[tone] || 'info', { size: 16 });
+  const span = document.createElement('span');
+  span.textContent = message;
+  node.appendChild(span);
   host.appendChild(node);
   setTimeout(() => node.classList.add('toast-in'), 10);
   setTimeout(() => {
@@ -44,9 +51,10 @@ export function toast(message, tone = 'info', timeout = 4000) {
   }, timeout);
 }
 
-export function emptyCTA(el, { title, message, href, label } = {}) {
+export function emptyCTA(el, { title, message, href, label, icon: iconName = 'inbox' } = {}) {
   if (!el) return;
-  el.innerHTML = `<div class="card"><div class="card-body" style="align-items:center;text-align:center">
+  el.innerHTML = `<div class="card"><div class="card-body empty-cta">
+    ${icon(iconName, { size: 34 })}
     ${title ? `<h3 class="card-title">${escapeHtml(title)}</h3>` : ''}
     ${message ? `<p class="text-muted">${escapeHtml(message)}</p>` : ''}
     ${href && label ? `<a class="btn btn-primary" href="${escapeHtml(href)}">${escapeHtml(label)}</a>` : ''}
@@ -71,7 +79,7 @@ export function statusStepper(status) {
   const steps = FLOW_STEPS.map((step, i) => {
     const state = terminal ? 'cancelled' : i < current ? 'done' : i === current ? 'current' : 'upcoming';
     return `<div class="stepper-step is-${state}">
-      <span class="stepper-dot">${state === 'done' ? '✓' : i + 1}</span>
+      <span class="stepper-dot">${state === 'done' ? icon('check', { size: 12 }) : i + 1}</span>
       <span class="stepper-label">${escapeHtml(step.label)}</span>
     </div>`;
   }).join('');
@@ -87,7 +95,7 @@ export function moneyBreakdown(rows = [], { total } = {}) {
   return `<div class="breakdown">${body}${totalRow}</div>`;
 }
 
-export function statTile({ label, value, hint, tone = '', href, animate = false, format = 'number', spark = null, delta = null } = {}) {
+export function statTile({ label, value, hint, tone = '', href, animate = false, format = 'number', spark = null, delta = null, icon: iconName = null } = {}) {
   const numeric = typeof value === 'number' && Number.isFinite(value);
   const valueHtml = animate && numeric
     ? `<span class="stat-value" data-count="${value}" data-format="${escapeHtml(format)}">0</span>`
@@ -97,8 +105,9 @@ export function statTile({ label, value, hint, tone = '', href, animate = false,
     ? `<span class="stat-delta ${delta.dir === 'down' ? 'is-down' : 'is-up'}">${delta.dir === 'down' ? '▼' : '▲'} ${escapeHtml(String(delta.label))}</span>`
     : '';
   const sparkHtml = (spark && spark.length > 1) ? sparkline(spark, { width: 140, height: 36 }) : '';
+  const iconHtml = iconName ? `<span class="stat-icon" aria-hidden="true">${icon(iconName, { size: 18 })}</span>` : '';
 
-  const inner = `<span class="text-muted text-xs">${escapeHtml(label || '')}</span>
+  const inner = `${iconHtml}<span class="text-muted text-xs">${escapeHtml(label || '')}</span>
     <span class="stat-figure">${valueHtml}${deltaHtml}</span>
     ${sparkHtml}
     ${hint ? `<span class="text-xs text-muted">${escapeHtml(hint)}</span>` : ''}`;
@@ -168,6 +177,8 @@ export function observeEnhancements() {
     pending = true;
     requestAnimationFrame(() => {
       pending = false;
+      mountIcons();
+      decorateAll();
       animateCounts();
       initCharts();
       initReveal();
@@ -204,7 +215,7 @@ export function openModal({ title, body, actions = [], size = '', dismissible = 
   closeBtn.type = 'button';
   closeBtn.className = 'modal-close';
   closeBtn.setAttribute('aria-label', 'Close');
-  closeBtn.textContent = '×';
+  closeBtn.innerHTML = icon('x', { size: 18 });
   if (title) header.appendChild(titleEl);
   if (dismissible) header.appendChild(closeBtn);
 

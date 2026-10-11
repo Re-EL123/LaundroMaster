@@ -33,28 +33,28 @@ function makeChart(type, data, options) {
   function render(s) {
     if (queueEl) {
       queueEl.innerHTML = [
-        { label: 'Verifications pending', value: s.pending, hint: 'Review & approve owners', href: 'pages/verifications.html', tone: s.pending ? 'warn' : '', animate: true },
-        { label: 'Refunds pending', value: s.refunds_pending, hint: 'Awaiting decision', href: 'pages/refunds.html', tone: s.refunds_pending ? 'warn' : '', animate: true },
-        { label: 'Payouts pending', value: s.payouts_pending_count, hint: currency(s.payouts_pending), href: 'pages/payouts.html', tone: s.payouts_pending_count ? 'warn' : '', animate: true },
-        { label: 'Commissions unsettled', value: s.commissions_pending, hint: 'Settle ledger', href: 'pages/commissions.html', tone: s.commissions_pending ? 'warn' : '', animate: true },
+        { label: 'Verifications pending', value: s.pending, hint: 'Review & approve owners', href: 'pages/verifications.html', tone: s.pending ? 'warn' : '', animate: true, icon: 'badge-check' },
+        { label: 'Refunds pending', value: s.refunds_pending, hint: 'Awaiting decision', href: 'pages/refunds.html', tone: s.refunds_pending ? 'warn' : '', animate: true, icon: 'rotate-ccw' },
+        { label: 'Payouts pending', value: s.payouts_pending_count, hint: currency(s.payouts_pending), href: 'pages/payouts.html', tone: s.payouts_pending_count ? 'warn' : '', animate: true, icon: 'banknote' },
+        { label: 'Commissions unsettled', value: s.commissions_pending, hint: 'Settle ledger', href: 'pages/commissions.html', tone: s.commissions_pending ? 'warn' : '', animate: true, icon: 'percent' },
       ].map(statTile).join('');
     }
 
     if (moneyEl) {
       moneyEl.innerHTML = [
-        { label: 'GMV', value: s.gmv, format: 'currency', animate: true },
-        { label: 'Platform revenue', value: s.commission_revenue, format: 'currency', animate: true },
-        { label: 'MRR', value: s.mrr, format: 'currency', animate: true },
-        { label: 'Active subscriptions', value: s.active_subscriptions, animate: true },
+        { label: 'GMV', value: s.gmv, format: 'currency', animate: true, icon: 'trending-up' },
+        { label: 'Platform revenue', value: s.commission_revenue, format: 'currency', animate: true, icon: 'circle-dollar-sign' },
+        { label: 'MRR', value: s.mrr, format: 'currency', animate: true, icon: 'trending-up' },
+        { label: 'Active subscriptions', value: s.active_subscriptions, animate: true, icon: 'layers' },
       ].map(statTile).join('');
     }
 
     if (statsEl) {
       statsEl.innerHTML = [
-        { label: 'Users', value: s.users, animate: true },
-        { label: 'Bookings', value: s.bookings, animate: true },
-        { label: 'Approved', value: s.approved, animate: true },
-        { label: 'Active promotions', value: s.promotions_active, animate: true },
+        { label: 'Users', value: s.users, animate: true, icon: 'users' },
+        { label: 'Bookings', value: s.bookings, animate: true, icon: 'package' },
+        { label: 'Approved', value: s.approved, animate: true, icon: 'badge-check' },
+        { label: 'Active promotions', value: s.promotions_active, animate: true, icon: 'tag' },
       ].map(statTile).join('');
     }
 
