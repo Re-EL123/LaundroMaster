@@ -14,25 +14,26 @@ import { openHoursEditor, openZonesEditor } from '../../../shared/js/operations.
   const msg = document.getElementById('msg');
   const bizList = document.getElementById('bizList');
 
-  try {
-    const { data } = await api.get('/auth?action=me');
+  const [meRes, laundromatsRes, brandingRes] = await Promise.allSettled([
+    api.get('/auth?action=me'),
+    isOwner ? api.get('/owner?action=laundromats') : Promise.resolve({ data: [] }),
+    api.get('/owner?action=branding'),
+  ]);
+
+  if (meRes.status === 'fulfilled') {
+    const data = meRes.value;
     document.getElementById('full_name').value = data.user.full_name || '';
     document.getElementById('email').value = data.user.email || '';
     document.getElementById('phone').value = data.user.phone || '';
-  } catch (err) {
-    msg.textContent = err.message || 'Failed to load profile.';
+  } else {
+    msg.textContent = (meRes.reason && meRes.reason.message) || 'Failed to load profile.';
     msg.className = 'form-msg is-error';
   }
 
-  let owned = [];
-  try {
-    if (isOwner) {
-      const { data } = await api.get('/owner?action=laundromats');
-      owned = data || [];
-    }
-    const { data: laundromats } = await api.get('/owner?action=branding');
-    mountBranding(bizList, laundromats);
-  } catch (err) {
+  const owned = laundromatsRes.status === 'fulfilled' ? (laundromatsRes.value.data || []) : [];
+  if (brandingRes.status === 'fulfilled') {
+    mountBranding(bizList, brandingRes.value.data);
+  } else {
     bizList.innerHTML = '<p class="text-muted text-sm">Could not load laundromats.</p>';
   }
 

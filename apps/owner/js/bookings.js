@@ -230,6 +230,6 @@ const SLA_MINUTES = 60;
   });
 
   filter.addEventListener('change', load);
-  await loadStaff();
   load();
+  loadStaff();
 })();

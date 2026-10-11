@@ -4,6 +4,9 @@
 export function wirePrefetch(root = document) {
   const done = new Set();
 
+  const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (conn && (conn.saveData || /(^|-)2g$/.test(conn.effectiveType || ''))) return () => {};
+
   const prefetch = (href) => {
     if (!href || href.startsWith('#') || /^(mailto:|tel:|https?:)/i.test(href)) return;
     let url;
@@ -26,6 +29,16 @@ export function wirePrefetch(root = document) {
 
   root.addEventListener('pointerover', onOver, { passive: true });
   root.addEventListener('focusin', onOver);
+
+  // Speculatively warm the primary navigation once the page is idle so the
+  // next in-app jump is instant even without a hover.
+  const warm = () => {
+    root.querySelectorAll('.side-nav a[href], .nav a[href], .header-actions a[href]')
+      .forEach((a) => prefetch(a.getAttribute('href')));
+  };
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(warm, { timeout: 2500 });
+  else setTimeout(warm, 900);
+
   return () => {
     root.removeEventListener('pointerover', onOver);
     root.removeEventListener('focusin', onOver);

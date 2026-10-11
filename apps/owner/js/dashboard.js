@@ -182,7 +182,10 @@ const FIX_META = {
     });
   }
 
-  // Stats + verification + recent in parallel; analytics paints first as well.
+  // Analytics loads concurrently with stats/verification/recent.
+  loadAnalytics();
+
+  // Stats + verification + recent in parallel.
   const [statsRes, verifyRes, recentRes] = await Promise.allSettled([
     swr('owner:stats', async () => (await api.get('/owner?action=stats')).data, { ttl: 60000, onUpdate: paintStats }),
     swr('owner:verification', async () => (await api.get('/owner?action=verification')).data, { ttl: 60000, onUpdate: paintVerification }),
@@ -197,8 +200,6 @@ const FIX_META = {
 
   if (recentRes.status === 'fulfilled') paintRecent(recentRes.value);
   else emptyState(recentEl, 'Could not load bookings.');
-
-  loadAnalytics();
 
   initReveal(document);
   animateCounts(document);

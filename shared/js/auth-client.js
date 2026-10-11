@@ -39,6 +39,7 @@ export function setSession(session) {
 
 export function clearSession() {
   localStorage.removeItem(STORAGE_KEY);
+  try { sessionStorage.removeItem('lm_auth_validated'); } catch { /* ignore */ }
 }
 
 export function getRole() {
@@ -141,7 +142,11 @@ export async function me() {
     if (!next) return null;
     r = await raw('/auth?action=me', { token: next.access_token });
   }
-  if (!r.ok) return null;
+  // 401/403 => the session is genuinely invalid. Anything else (5xx, etc.) is a
+  // transient server problem: throw so callers keep the cached view instead of
+  // logging the user out.
+  if (r.status === 401 || r.status === 403) return null;
+  if (!r.ok) throw new Error(`Session check failed (${r.status})`);
   return r.data.data;
 }
 

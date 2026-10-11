@@ -135,6 +135,8 @@ registerForm.addEventListener('submit', async (e) => {
 /* Already signed in? Go straight to the right app. */
 (async () => {
   if (!getSession()) return;
-  const user = await me();
-  if (user && user.role) location.href = nextTarget(user.role);
+  try {
+    const user = await me();
+    if (user && user.role) location.href = nextTarget(user.role);
+  } catch { /* offline or transient server error — stay on sign-in */ }
 })();
