@@ -362,23 +362,68 @@ export default createHandler(async function handler(req, res) {
       }
       const days = parsed.data.days || num(settings.promotion_days, 30);
       const price = num(settings.promotion_price, 199);
-      const ends = new Date();
-      ends.setDate(ends.getDate() + days);
-      const { data, error } = await supa.from('promotions').insert({
-        laundromat_id,
-        owner_id: ctx.user.id,
-        kind,
-        amount_paid: price,
-        starts_at: new Date().toISOString(),
-        ends_at: ends.toISOString(),
-        status: 'active',
-      }).select().single();
-      if (error) return res.status(400).json(errorEnvelope(error));
-      if (kind === 'featured') {
-        await supa.from('laundromats').update({ is_featured: true, featured_until: ends.toISOString() }).eq('id', laundromat_id);
+      if (price <= 0) {
+        const ends = new Date();
+        ends.setDate(ends.getDate() + days);
+        const { data, error } = await supa.from('promotions').insert({
+          laundromat_id,
+          owner_id: ctx.user.id,
+          kind,
+          amount_paid: 0,
+          starts_at: new Date().toISOString(),
+          ends_at: ends.toISOString(),
+          status: 'active',
+        }).select().single();
+        if (error) return res.status(400).json(errorEnvelope(error));
+        if (kind === 'featured') {
+          await supa.from('laundromats').update({ is_featured: true, featured_until: ends.toISOString() }).eq('id', laundromat_id);
+        }
+        await supa.from('transactions').insert({ laundromat_id, type: 'promotion', amount: 0, currency: settings.currency || 'ZAR' });
+        return res.status(201).json(successEnvelope({ promotion: data, paid: true, checkout_url: null, amount: 0 }));
       }
-      await supa.from('transactions').insert({ laundromat_id, type: 'promotion', amount: price, currency: settings.currency || 'ZAR' });
-      return res.status(201).json(successEnvelope(data));
+      const configured = await Promise.resolve((await import('./_lib/ikhokha.js')).isConfigured());
+      if (!configured) {
+        return res.status(503).json(errorEnvelope(new ApiError('GATEWAY_NOT_CONFIGURED', 'Online payments are temporarily unavailable. Please try again later.', 503)));
+      }
+      const { data: payment, error: payErr } = await supa.from('payments').insert({
+        user_id: ctx.user.id,
+        purpose: 'promotion',
+        provider: 'ikhokha',
+        amount: price,
+        currency: settings.currency || 'ZAR',
+        status: 'created',
+        metadata: { laundromat_id, owner_id: ctx.user.id, kind, days },
+      }).select().single();
+      if (payErr) return res.status(400).json(errorEnvelope(payErr));
+      const { createPaymentLink } = await import('./_lib/ikhokha.js');
+      const base = process.env.PUBLIC_APP_URL || process.env.APP_BASE_URL || 'https://laundromaster.re-el.co.za';
+      const apiBaseUrl = process.env.API_PUBLIC_URL || '';
+      const cb = apiBaseUrl ? `${apiBaseUrl.replace(/\/$/, '')}/api/webhooks` : `${base}/api/webhooks`;
+      const page = `${base}/apps/owner/pages/promotions.html`;
+      const q = `payment=${encodeURIComponent(payment.id)}`;
+      const urls = {
+        callbackUrl: cb,
+        successPageUrl: `${page}?${q}&promo=paid`,
+        failurePageUrl: `${page}?${q}&promo=failed`,
+        cancelUrl: `${page}?${q}&promo=canceled`,
+      };
+      const link = await createPaymentLink({
+        amount: price,
+        currency: settings.currency || 'ZAR',
+        reference: payment.id,
+        description: 'LaundroMaster promotion',
+        requesterUrl: urls.successPageUrl,
+        ...urls,
+      });
+      await supa.from('payments').update({
+        provider_reference: payment.id,
+        paylink_id: link.paylinkID || null,
+        checkout_url: link.paylinkUrl || null,
+        status: 'pending',
+        raw_status: link.responseCode || null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', payment.id);
+      return res.status(201).json(successEnvelope({ payment: { ...payment, checkout_url: link.paylinkUrl, paylink_id: link.paylinkID }, paid: false, checkout_url: link.paylinkUrl, configured: true }));
     }
 
     if (action === 'payout-request') {

@@ -68,13 +68,28 @@ import { mountDashboard } from '../../../shared/js/shell.js';
     e.preventDefault();
     const btn = form.querySelector('button[type="submit"]');
     btn.disabled = true;
+    const original = btn.textContent;
     try {
-      await api.post('/owner?action=promote', { laundromat_id: select.value, kind: 'featured' });
-      toast('Promotion activated', 'success');
+      btn.textContent = 'Redirecting to payment...';
+      const { data } = await api.post('/owner?action=promote', { laundromat_id: select.value, kind: 'featured' });
+      if (data && data.checkout_url) {
+        window.location.href = data.checkout_url;
+        return;
+      }
+      if (data && data.paid) {
+        toast('Promotion activated', 'success');
+        load();
+        return;
+      }
+      toast('Promotion created', 'success');
       load();
     } catch (err) {
       toast(err.message || 'Could not start promotion', 'danger');
+      btn.textContent = original;
     } finally {
+      if (btn.textContent === 'Redirecting to payment...') {
+        btn.textContent = original;
+      }
       btn.disabled = false;
     }
   });

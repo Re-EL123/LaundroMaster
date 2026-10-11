@@ -45,6 +45,18 @@ function subscriptionReturnUrls(req, audience, paymentId) {
   };
 }
 
+function promotionReturnUrls(req, paymentId) {
+  const base = process.env.PUBLIC_APP_URL || process.env.APP_BASE_URL || 'https://laundromaster.re-el.co.za';
+  const page = `${base}/apps/owner/pages/promotions.html`;
+  const q = `payment=${encodeURIComponent(paymentId)}`;
+  return {
+    callbackUrl: `${apiBase(req)}/api/webhooks`,
+    successPageUrl: `${page}?${q}&promo=paid`,
+    failurePageUrl: `${page}?${q}&promo=failed`,
+    cancelUrl: `${page}?${q}&promo=canceled`,
+  };
+}
+
 async function listPlans(supa, audience) {
   let req = supa.from('plans').select('*').eq('is_active', true).order('audience', { ascending: true }).order('sort', { ascending: true });
   if (audience) req = req.eq('audience', audience);
@@ -131,7 +143,7 @@ export default createHandler(async function handler(req, res) {
 
     if (!q.booking_id && !q.id) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing booking_id or id')));
     let request = supa.from('payments').select('*');
-    request = q.id ? request.eq('id', q.id) : request.eq('booking_id', q.booking_id);
+    request = q.id ? request.eq('id', q.id) : q.payment_id ? request.eq('id', q.payment_id) : request.eq('booking_id', q.booking_id);
     const { data, error } = await request.order('created_at', { ascending: false }).limit(1).maybeSingle();
     if (error || !data) return res.status(404).json(errorEnvelope(new ApiError('NOT_FOUND', 'Payment not found', 404)));
     return res.status(200).json(successEnvelope(data));

@@ -27,6 +27,39 @@ export async function markPaymentStatus(supa, payment, status, rawStatus = null,
   return data || { ...payment, ...patch };
 }
 
+async function activatePromotion(supa, payment) {
+  const meta = payment.metadata || {};
+  const laundromatId = meta.laundromat_id || payment.laundromat_id;
+  const ownerId = meta.owner_id || payment.user_id;
+  const kind = meta.kind || 'featured';
+  const days = Number(meta.days) || 30;
+  if (!laundromatId || !ownerId) return null;
+  const ends = new Date();
+  ends.setDate(ends.getDate() + days);
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supa.from('promotions').insert({
+    laundromat_id: laundromatId,
+    owner_id: ownerId,
+    kind,
+    amount_paid: Number(payment.amount) || 0,
+    currency: payment.currency || 'ZAR',
+    starts_at: nowIso,
+    ends_at: ends.toISOString(),
+    status: 'active',
+  }).select().single();
+  if (error) throw error;
+  if (kind === 'featured') {
+    await supa.from('laundromats').update({ is_featured: true, featured_until: ends.toISOString() }).eq('id', laundromatId);
+  }
+  await supa.from('transactions').insert({
+    laundromat_id: laundromatId,
+    type: 'promotion',
+    amount: Number(payment.amount) || 0,
+    currency: payment.currency || 'ZAR',
+  });
+  return data;
+}
+
 // Apply a payment outcome to its booking or subscription. Safe to call repeatedly.
 export async function reconcilePayment(supa, payment, rawStatus) {
   if (!payment) return null;
@@ -70,6 +103,11 @@ export async function reconcilePayment(supa, payment, rawStatus) {
       return { ...updated, subscription: sub };
     }
     return updated;
+  }
+
+  if (payment.purpose === 'promotion') {
+    const promo = await activatePromotion(supa, payment);
+    return { ...updated, promotion: promo };
   }
 
   if (payment.purpose === 'booking' && payment.booking_id) {
