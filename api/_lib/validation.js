@@ -207,6 +207,16 @@ export const bookingNote = z.object({
   internal_notes: z.string().max(2000).nullable(),
 });
 
+export const redeemPoints = z.object({
+  points: z.number().int().min(100),
+});
+
+export const documentUpload = z.object({
+  laundromat_id: uuid,
+  storage_path: z.string().min(1).max(500),
+  doc_type: z.enum(['business_registration', 'identity', 'proof_of_address', 'other']).default('other'),
+});
+
 export const staffInvite = z.object({
   laundromat_id: uuid,
   email: z.string().email(),

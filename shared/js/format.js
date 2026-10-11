@@ -85,6 +85,16 @@ const STATUS_LABELS = {
   suspended: 'Suspended',
   active: 'Active',
   expired: 'Expired',
+  created: 'Created',
+  processing: 'Processing',
+  succeeded: 'Paid',
+  paid: 'Paid',
+  failed: 'Failed',
+  refunded: 'Refunded',
+  partially_refunded: 'Partially refunded',
+  processed: 'Processed',
+  settled: 'Settled',
+  reversed: 'Reversed',
 };
 
 export function statusLabel(status) {
@@ -93,8 +103,8 @@ export function statusLabel(status) {
 }
 
 export function statusTone(status) {
-  if (['completed', 'approved', 'active', 'ready'].includes(status)) return 'success';
-  if (['cancelled', 'rejected', 'payment_failed', 'suspended'].includes(status)) return 'danger';
-  if (['pending_payment', 'pending_acceptance', 'pending', 'refund_pending'].includes(status)) return 'warning';
+  if (['completed', 'approved', 'active', 'ready', 'succeeded', 'paid', 'processed', 'settled', 'refunded'].includes(status)) return 'success';
+  if (['cancelled', 'rejected', 'payment_failed', 'suspended', 'failed', 'reversed'].includes(status)) return 'danger';
+  if (['pending_payment', 'pending_acceptance', 'pending', 'refund_pending', 'processing', 'partially_refunded'].includes(status)) return 'warning';
   return 'info';
 }

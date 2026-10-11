@@ -1,15 +1,16 @@
 import { createHandler } from './_lib/handler.js';
 import { successEnvelope, errorEnvelope, ApiError } from './_lib/errors.js';
 import { adminClient } from './_lib/supabase-admin.js';
-import { query, body } from './_lib/req.js';
+import { query, body, apiBase, appBase } from './_lib/req.js';
 import { requireRoles } from './_lib/auth.js';
 import {
   serviceCreate, serviceUpdate, promotionCreate, payoutRequest, ownerLaundromatUpdate,
-  staffInvite, staffUpdate, staffRemove, capacityUpdate, hoursUpdate, zonesUpdate,
+  staffInvite, staffUpdate, staffRemove, capacityUpdate, hoursUpdate, zonesUpdate, documentUpload,
 } from './_lib/validation.js';
 import { getSettings, num } from './_lib/settings.js';
 import { round2, activeSubscription, defaultPlan } from './_lib/pricing.js';
 import { reconcilePromotions } from './_lib/promotions.js';
+import { notifyUsers } from './_lib/push.js';
 
 const OWNER_ROLES = ['owner', 'admin', 'super_admin'];
 
@@ -299,6 +300,16 @@ export default createHandler(async function handler(req, res) {
       return res.status(200).json(successEnvelope(rows));
     }
 
+    if (action === 'documents') {
+      if (!ownedIds.length) return res.status(200).json(successEnvelope([]));
+      const { data, error } = await supa.from('documents')
+        .select('id, laundromat_id, uploaded_by, storage_path, doc_type, verification_state, created_at')
+        .in('laundromat_id', ownedIds)
+        .order('created_at', { ascending: false });
+      if (error) return res.status(400).json(errorEnvelope(error));
+      return res.status(200).json(successEnvelope(data || []));
+    }
+
     return res.status(200).json(successEnvelope({ service: 'owner', ok: true }));
   }
 
@@ -396,13 +407,10 @@ export default createHandler(async function handler(req, res) {
       }).select().single();
       if (payErr) return res.status(400).json(errorEnvelope(payErr));
       const { createPaymentLink } = await import('./_lib/ikhokha.js');
-      const base = process.env.PUBLIC_APP_URL || process.env.APP_BASE_URL || 'https://laundromaster.re-el.co.za';
-      const apiBaseUrl = process.env.API_PUBLIC_URL || '';
-      const cb = apiBaseUrl ? `${apiBaseUrl.replace(/\/$/, '')}/api/webhooks` : `${base}/api/webhooks`;
-      const page = `${base}/apps/owner/pages/promotions.html`;
+      const page = `${appBase()}/apps/owner/pages/promotions.html`;
       const q = `payment=${encodeURIComponent(payment.id)}`;
       const urls = {
-        callbackUrl: cb,
+        callbackUrl: `${apiBase(req)}/api/webhooks`,
         successPageUrl: `${page}?${q}&promo=paid`,
         failurePageUrl: `${page}?${q}&promo=failed`,
         cancelUrl: `${page}?${q}&promo=canceled`,
@@ -535,8 +543,36 @@ export default createHandler(async function handler(req, res) {
       return res.status(200).json(successEnvelope({ saved: rows.length }));
     }
 
+    if (action === 'document-upload') {
+      const parsed = documentUpload.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const { laundromat_id, storage_path, doc_type } = parsed.data;
+      if (!ownedIds.includes(laundromat_id)) {
+        return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
+      }
+      const { data, error } = await supa.from('documents').insert({
+        laundromat_id,
+        uploaded_by: ctx.user.id,
+        storage_path,
+        doc_type,
+        verification_state: 'pending',
+      }).select().single();
+      if (error) return res.status(400).json(errorEnvelope(error));
+      const { data: admins } = await supa.from('user_roles').select('user_id').eq('role', 'admin');
+      if (admins && admins.length) {
+        await notifyUsers(supa, admins.map((r) => r.user_id), {
+          type: 'verification', title: 'New verification document',
+          body: `A document was uploaded for review for ${laundromat_id.slice(0, 8)}…`,
+          url: 'apps/admin/pages/verifications.html',
+        });
+      }
+      return res.status(201).json(successEnvelope(data));
+    }
+
     return res.status(405).json(errorEnvelope(new ApiError('METHOD_NOT_ALLOWED', 'Method not allowed', 405)));
   }
 
   return res.status(405).json(errorEnvelope(new ApiError('METHOD_NOT_ALLOWED', 'Method not allowed', 405)));
 });
+
+/* ---------- Laundromaster ---------- */

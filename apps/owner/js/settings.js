@@ -4,6 +4,7 @@ import { escapeHtml } from '../../../shared/js/format.js';
 import { mountDashboard } from '../../../shared/js/shell.js';
 import { mountBranding } from '../../../shared/js/branding.js';
 import { openHoursEditor, openZonesEditor } from '../../../shared/js/operations.js';
+import { uploadDocument } from '../../../shared/js/uploads.js';
 
 (async function () {
   const user = await mountDashboard({ allowed: ['owner', 'staff', 'admin', 'super_admin'] });
@@ -137,16 +138,104 @@ import { openHoursEditor, openZonesEditor } from '../../../shared/js/operations.
     });
   }
 
+  const DOC_TYPE_LABELS = {
+    business_registration: 'Business registration (CIPC)',
+    identity: 'ID / passport',
+    proof_of_address: 'Proof of address',
+    other: 'Other',
+  };
+
+  async function initDocuments() {
+    const wrap = document.getElementById('documentsList');
+    if (!owned.length) {
+      emptyState(wrap, 'Add a laundromat before uploading documents.');
+      return;
+    }
+    let docs = {};
+    try {
+      const { data } = await api.get('/owner?action=documents');
+      docs = (data || []).reduce((m, d) => {
+        (m[d.laudromat_id] = m[d.laudromat_id] || []).push(d);
+        return m;
+      }, {});
+    } catch { /* list still renders without existing docs */ }
+
+    wrap.innerHTML = owned.map((l) => {
+      const rows = (docs[l.id] || []).map((d) => {
+        const label = DOC_TYPE_LABELS[d.doc_type] || d.doc_type;
+        return `<li class="flex justify-between items-center">
+          <span>${escapeHtml(label)} <span class="text-xs text-muted">· ${d.verification_state}</span></span>
+          <button class="btn btn-ghost" type="button" data-doc-view="${d.id}" data-bucket="verification-documents" data-path="${escapeHtml(d.storage_path)}">View</button>
+        </li>`;
+      }).join('') || '<li class="text-sm text-muted">No documents uploaded yet.</li>';
+      return `<article class="card" data-biz="${l.id}"><div class="card-body">
+        <h3 class="card-title">${escapeHtml(l.name)}</h3>
+        <ul class="plain-list">${rows}</ul>
+        <hr class="my-4">
+        <div class="field">
+          <label class="label">Document type</label>
+          <select class="input" data-doc-type>
+            ${Object.entries(DOC_TYPE_LABELS).map(([v, t]) => `<option value="${v}">${escapeHtml(t)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="flex items-center">
+          <input class="input" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx" data-doc-file>
+          <button class="btn btn-primary" type="button" data-doc-upload>Upload</button>
+        </div>
+      </div></article>`;
+    }).join('');
+
+    wrap.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button[data-doc-upload]');
+      const view = e.target.closest('button[data-doc-view]');
+      if (btn) {
+        const card = btn.closest('[data-biz]');
+        const fileInput = card && card.querySelector('[data-doc-file]');
+        const file = fileInput && fileInput.files && fileInput.files[0];
+        if (!file) { toast('Choose a document first', 'info'); return; }
+        btn.disabled = true;
+        const original = btn.textContent;
+        btn.textContent = 'Uploading…';
+        try {
+          const path = await uploadDocument(file, { bucket: 'verification-documents', prefix: card.dataset.biz });
+          await api.post('/owner?action=document-upload', {
+            laundromat_id: card.dataset.biz,
+            storage_path: path,
+            doc_type: card.querySelector('[data-doc-type]').value,
+          });
+          toast('Document uploaded for review', 'success');
+          initDocuments();
+        } catch (err) {
+          toast(err.message || 'Could not upload document', 'danger');
+          btn.textContent = original;
+          btn.disabled = false;
+        }
+      } else if (view) {
+        view.disabled = true;
+        try {
+          const { data } = await api.get(`/uploads?bucket=${encodeURIComponent(view.dataset.bucket)}&path=${encodeURIComponent(view.dataset.path)}`);
+          window.open(data.url, '_blank', 'noopener');
+        } catch (err) {
+          toast(err.message || 'Could not open document', 'danger');
+        } finally {
+          view.disabled = false;
+        }
+      }
+    });
+  }
+
   if (isOwner) {
     document.getElementById('teamSection').hidden = false;
     document.getElementById('availabilitySection').hidden = false;
     document.getElementById('operationsSection').hidden = false;
+    document.getElementById('documentsSection').hidden = false;
     document.getElementById('inviteBiz').innerHTML = owned
       .map((l) => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
 
     loadTeam();
     initCapacity();
     initOperations();
+    initDocuments();
 
     document.getElementById('inviteForm').addEventListener('submit', async (e) => {
       e.preventDefault();

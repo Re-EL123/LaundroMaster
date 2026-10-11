@@ -58,7 +58,7 @@ import { mountDashboard } from '../../../shared/js/shell.js';
         <p class="text-sm"><strong>${active}</strong> active services &middot; ${services.length} total</p>
         <h4 class="text-sm text-muted">Documents</h4>
         ${docs.length
-          ? `<ul class="plain-list">${docs.map((doc) => `<li>${escapeHtml(doc.doc_type || 'Document')} <span class="text-xs text-muted">· ${escapeHtml(doc.verification_state || '')} · ${formatDate(doc.created_at)}</span></li>`).join('')}</ul>`
+          ? `<ul class="plain-list">${docs.map((doc) => `<li class="flex justify-between items-center"><span>${escapeHtml(doc.doc_type || 'Document')} <span class="text-xs text-muted">· ${escapeHtml(doc.verification_state || '')} · ${formatDate(doc.created_at)}</span></span><button type="button" class="btn btn-ghost" data-doc-view data-bucket="verification-documents" data-path="${escapeHtml(doc.storage_path)}">View</button></li>`).join('')}</ul>`
           : '<p class="text-sm text-muted">No documents uploaded.</p>'}
         ${history.length
           ? `<h4 class="text-sm text-muted">Recent activity</h4><ul class="plain-list">${history.map((h) => `<li>${escapeHtml(h.action)} <span class="text-xs text-muted">· ${formatDate(h.created_at)}</span></li>`).join('')}</ul>`
@@ -129,8 +129,20 @@ import { mountDashboard } from '../../../shared/js/shell.js';
   });
 
   if (detail) {
-    detail.addEventListener('click', (e) => {
+    detail.addEventListener('click', async (e) => {
       if (e.target.closest('[data-close-detail]')) { detail.innerHTML = ''; return; }
+      const view = e.target.closest('[data-doc-view]');
+      if (view) {
+        view.disabled = true;
+        try {
+          const { data } = await api.get(`/uploads?bucket=${encodeURIComponent(view.dataset.bucket)}&path=${encodeURIComponent(view.dataset.path)}`);
+          window.open(data.url, '_blank', 'noopener');
+        } catch (err) {
+          toast(err.message || 'Could not open document', 'danger');
+          view.disabled = false;
+        }
+        return;
+      }
       const btn = e.target.closest('button[data-status]');
       if (btn) handle(btn, btn.dataset.id, btn.dataset.status);
     });

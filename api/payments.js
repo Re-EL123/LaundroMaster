@@ -1,24 +1,13 @@
 import { createHandler } from './_lib/handler.js';
 import { successEnvelope, errorEnvelope, ApiError } from './_lib/errors.js';
 import { adminClient } from './_lib/supabase-admin.js';
-import { query, body } from './_lib/req.js';
+import { query, body, apiBase } from './_lib/req.js';
 import { requireUser, isAdmin } from './_lib/auth.js';
 import { paymentCreate, subscribePlan, cancelSubscription } from './_lib/validation.js';
 import { getSettings, num } from './_lib/settings.js';
 import { activeSubscription, activateSubscription, round2 } from './_lib/pricing.js';
 import { reconcilePayment } from './_lib/billing.js';
 import { isConfigured, createPaymentLink, getPaymentStatus } from './_lib/ikhokha.js';
-
-function appBase() {
-  return (process.env.PUBLIC_APP_URL || process.env.APP_BASE_URL || 'https://laundromaster.re-el.co.za').replace(/\/$/, '');
-}
-
-function apiBase(req) {
-  if (process.env.API_PUBLIC_URL) return process.env.API_PUBLIC_URL.replace(/\/$/, '');
-  const host = req.headers['x-forwarded-host'] || req.headers.host || 'laundromaster-sable.vercel.app';
-  const proto = req.headers['x-forwarded-proto'] || 'https';
-  return `${proto}://${host}`;
-}
 
 function bookingReturnUrls(req, bookingId, paymentId) {
   const base = process.env.PUBLIC_APP_URL || process.env.APP_BASE_URL || 'https://laundromaster.re-el.co.za';
@@ -42,18 +31,6 @@ function subscriptionReturnUrls(req, audience, paymentId) {
     successPageUrl: `${page}?${q}&sub=paid`,
     failurePageUrl: `${page}?${q}&sub=failed`,
     cancelUrl: `${page}?${q}&sub=canceled`,
-  };
-}
-
-function promotionReturnUrls(req, paymentId) {
-  const base = process.env.PUBLIC_APP_URL || process.env.APP_BASE_URL || 'https://laundromaster.re-el.co.za';
-  const page = `${base}/apps/owner/pages/promotions.html`;
-  const q = `payment=${encodeURIComponent(paymentId)}`;
-  return {
-    callbackUrl: `${apiBase(req)}/api/webhooks`,
-    successPageUrl: `${page}?${q}&promo=paid`,
-    failurePageUrl: `${page}?${q}&promo=failed`,
-    cancelUrl: `${page}?${q}&promo=canceled`,
   };
 }
 
@@ -162,9 +139,21 @@ export default createHandler(async function handler(req, res) {
         return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your booking', 403)));
       }
 
-      const amount = Number(booking.total_amount) || 0;
       const { data: existing } = await supa.from('payments').select('*')
         .eq('booking_id', booking_id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+
+      // Apply any store credit before charging the gateway. Atomically done in Postgres,
+      // idempotent (skips once a payment attempt exists) and never double-spends.
+      let amount = Number(booking.total_amount) || 0;
+      if (amount > 0 && !existing) {
+        const creditResult = await supa.rpc('apply_store_credit', { p_booking_id: booking_id });
+        if (!creditResult.error && creditResult.data && creditResult.data.error !== 'not_found') {
+          amount = Number(creditResult.data.amount);
+          if (Number(creditResult.data.applied) > 0) {
+            booking.total_amount = amount;
+          }
+        }
+      }
 
       // Free orders (or already-paid) skip the gateway entirely.
       if (amount <= 0) {

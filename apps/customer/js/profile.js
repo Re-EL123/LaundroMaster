@@ -267,11 +267,21 @@ async function loadRewards() {
       api.get('/auth?action=referral'),
     ]);
     const link = `${location.origin}${location.pathname.replace('/apps/customer/pages/profile.html', '/apps/portal/index.html')}?ref=${encodeURIComponent(referral.code)}`;
+    const min = (loyalty.redemption && loyalty.redemption.min_points) || 100;
+    const perRand = (loyalty.redemption && loyalty.redemption.points_per_rand) || 100;
+    const redeemable = Math.floor((loyalty.points || 0) / perRand);
     rewardsCard.innerHTML = `<div class="card"><div class="card-body">
       <div class="flex justify-between wrap">
         <div><span class="text-xs text-muted">Loyalty points</span><p class="stat-value">${loyalty.points}</p></div>
         <div><span class="text-xs text-muted">Credit</span><p class="stat-value">${currency(loyalty.credit)}</p></div>
       </div>
+      ${loyalty.points >= min
+        ? `<div class="flex items-center mt-4">
+            <input class="input" type="number" min="${min}" step="${perRand}" value="${min}" id="redeemPoints" aria-label="Points to redeem">
+            <button class="btn btn-secondary" type="button" id="redeemBtn">Redeem for credit</button>
+          </div>
+          <p class="text-xs text-muted mt-2">${perRand} points = ${currency(1)} of store credit. Credit is applied automatically at checkout.</p>`
+        : ''}
       <h3 class="text-sm mt-4">Refer a friend</h3>
       <p class="text-sm text-muted">Share your code <strong>${escapeHtml(referral.code)}</strong> — you both earn rewards.</p>
       <div class="flex">
@@ -287,6 +297,24 @@ async function loadRewards() {
         toast('Invite link copied', 'success');
       } catch {
         document.getElementById('refLink').select();
+      }
+    });
+    const redeemBtn = document.getElementById('redeemBtn');
+    if (redeemBtn) redeemBtn.addEventListener('click', async () => {
+      const input = document.getElementById('redeemPoints');
+      const points = Number(input && input.value);
+      if (!points || points < min || points % perRand !== 0) {
+        toast(`Redeem in multiples of ${perRand} points`, 'danger');
+        return;
+      }
+      redeemBtn.disabled = true;
+      try {
+        const { data } = await api.post('/bookings?action=redeem-points', { points });
+        toast(`Redeemed for ${currency(Number(data.redeemed.credit) || 0)} credit`, 'success');
+        loadRewards();
+      } catch (err) {
+        toast(err.message || 'Could not redeem points', 'danger');
+        redeemBtn.disabled = false;
       }
     });
   } catch (err) {

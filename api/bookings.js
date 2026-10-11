@@ -3,7 +3,7 @@ import { successEnvelope, errorEnvelope, ApiError } from './_lib/errors.js';
 import { adminClient } from './_lib/supabase-admin.js';
 import { query, body } from './_lib/req.js';
 import { requireUser, requireRoles, isAdmin, isOwner } from './_lib/auth.js';
-import { bookingCreate, bookingUpdateStatus, bookingAssignStaff, bookingMessage, bookingNote } from './_lib/validation.js';
+import { bookingCreate, bookingUpdateStatus, bookingAssignStaff, bookingMessage, bookingNote, redeemPoints } from './_lib/validation.js';
 import { getSettings } from './_lib/settings.js';
 import {
   ownerCommissionPercent, isCustomerSubscriber, computeDeliveryFee,
@@ -14,6 +14,8 @@ import { notifyUser } from './_lib/push.js';
 const CANCELLABLE = ['pending_payment', 'pending_acceptance'];
 const REFUNDABLE = ['completed', 'cancelled', 'rejected', 'payment_failed'];
 const LOYALTY_POINTS_PER_CURRENCY = 10;
+const REDEMPTION_MIN_POINTS = 100;
+const REDEMPTION_POINTS_PER_RAND = 100;
 
 // Allowed forward transitions for the order lifecycle. Admins bypass this.
 const TRANSITIONS = {
@@ -106,6 +108,7 @@ async function awardCompletion(supa, booking) {
     const { data: profile } = await supa.from('profiles').select('credit_balance').eq('id', booking.customer_id).maybeSingle();
     const currentCredit = Number(profile && profile.credit_balance) || 0;
     await supa.from('profiles').update({ credit_balance: currentCredit + 50 }).eq('id', booking.customer_id);
+    await supa.from('credit_events').insert({ user_id: booking.customer_id, amount: 50, reason: 'referral_welcome', booking_id: booking.id });
     await notifyUser(supa, ref.referrer_id, {
       type: 'referral_reward',
       title: 'You earned referral points',
@@ -128,14 +131,18 @@ export default createHandler(async function handler(req, res) {
       const booking = await loadBooking(supa, q.id);
       const permitted = await canAccessBooking(supa, ctx, booking);
       if (!permitted) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'You do not have access to this booking', 403)));
-      const [{ data: payment }, { data: history }, { data: messages }, { data: refunds }] = await Promise.all([
+      const [{ data: payment }, { data: history }, { data: messages }] = await Promise.all([
         supa.from('payments').select('*').eq('booking_id', booking.id).order('created_at', { ascending: false }),
         supa.from('booking_status_history').select('*').eq('booking_id', booking.id).order('created_at', { ascending: true }),
         supa.from('booking_messages').select('id, sender_id, sender_role, body, created_at').eq('booking_id', booking.id).order('created_at', { ascending: true }),
-        supa.from('refunds').select('*').eq('booking_id', booking.id).order('created_at', { ascending: false }).limit(1),
       ]);
       const myPayment = (payment || [])[0] || null;
-      const refund = (refunds || [])[0] || null;
+      const paymentIds = (payment || []).map((p) => p.id);
+      let refund = null;
+      if (paymentIds.length) {
+        const { data: refunds } = await supa.from('refunds').select('*').in('payment_id', paymentIds).order('created_at', { ascending: false }).limit(1);
+        refund = (refunds || [])[0] || null;
+      }
       if (!isAdmin(ctx) && booking.customer_id !== ctx.user.id) {
         // Owners/staff do not see internal payout internals; keep booking row but strip nothing sensitive here.
       }
@@ -166,6 +173,10 @@ export default createHandler(async function handler(req, res) {
         credit: Number(profile && profile.credit_balance) || 0,
         referral_code: profile ? profile.referral_code : null,
         events: rows,
+        redemption: {
+          min_points: REDEMPTION_MIN_POINTS,
+          points_per_rand: REDEMPTION_POINTS_PER_RAND,
+        },
       }));
     }
 
@@ -476,6 +487,36 @@ export default createHandler(async function handler(req, res) {
         .eq('id', booking_id).select().single();
       if (error) return res.status(400).json(errorEnvelope(error));
       return res.status(200).json(successEnvelope(data));
+    }
+
+    if (action === 'redeem-points') {
+      const ctx = await requireUser(req);
+      const parsed = redeemPoints.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const { points } = parsed.data;
+      if (!Number.isInteger(points) || points < REDEMPTION_MIN_POINTS) {
+        return res.status(400).json(errorEnvelope(new ApiError('BELOW_MINIMUM', `Redeem at least ${REDEMPTION_MIN_POINTS} points`)));
+      }
+      const result = await supa.rpc('redeem_loyalty_points', { p_user_id: ctx.user.id, p_points: points });
+      if (result.error) return res.status(400).json(errorEnvelope(result.error));
+      if (result.data && result.data.error === 'insufficient_points') {
+        return res.status(400).json(errorEnvelope(new ApiError('INSUFFICIENT_POINTS', 'Not enough loyalty points')));
+      }
+      if (result.data && result.data.error === 'below_minimum') {
+        return res.status(400).json(errorEnvelope(new ApiError('BELOW_MINIMUM', `Redeem at least ${REDEMPTION_MIN_POINTS} points`)));
+      }
+      const [{ data: events }, { data: profile }] = await Promise.all([
+        supa.from('loyalty_events').select('*').eq('user_id', ctx.user.id).order('created_at', { ascending: false }).limit(50),
+        supa.from('profiles').select('referral_code, credit_balance').eq('id', ctx.user.id).maybeSingle(),
+      ]);
+      const pointsBalance = (events || []).reduce((s, e) => s + (Number(e.points) || 0), 0);
+      return res.status(200).json(successEnvelope({
+        points: pointsBalance,
+        credit: Number(profile && profile.credit_balance) || 0,
+        referral_code: profile ? profile.referral_code : null,
+        redeemed: result.data,
+        events: events || [],
+      }));
     }
 
     return res.status(405).json(errorEnvelope(new ApiError('METHOD_NOT_ALLOWED', 'Method not allowed', 405)));
