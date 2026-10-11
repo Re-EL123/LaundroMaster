@@ -86,13 +86,19 @@ document.getElementById('nearBtn').addEventListener('click', () => {
         const res = await api.get(`/geo?action=search&lat=${latitude}&lng=${longitude}&radius_km=50&limit=50`);
         const items = (res.data || []).sort((a, b) => (Number(a.distance_km) || 0) - (Number(b.distance_km) || 0));
         resultCount.textContent = items.length ? `${items.length} nearby` : '';
-        if (!items.length) return emptyState(list, 'No laundromats within 50 km.');
+        if (!items.length) {
+          // Fallback to text search
+          input.value = '';
+          return search();
+        }
         list.innerHTML = items.map(laundromatCard).join('');
       } catch (err) {
         errorState(list, err.message || 'Failed to search near you.');
       }
     },
-    () => errorState(list, 'Location permission denied.'),
+    () => {
+      toast('Location permission denied.', 'info');
+    },
     { enableHighAccuracy: false, timeout: 8000 }
   );
 });

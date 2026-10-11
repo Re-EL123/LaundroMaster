@@ -14,6 +14,23 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
+
+async function geocode(q) {
+  if (!q || q.length < 3) return null;
+  try {
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=1`;
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const feats = data && data.features;
+    if (!feats || !feats.length) return null;
+    const c = feats[0].geometry && feats[0].geometry.coordinates;
+    if (!c) return null;
+    return { lat: c[1], lng: c[0], label: feats[0].properties };
+  } catch {
+    return null;
+  }
+}
 export default createHandler(async function handler(req, res) {
   const q = query(req);
   const supa = adminClient();
@@ -24,6 +41,11 @@ export default createHandler(async function handler(req, res) {
   }
 
   const action = q.action || 'search';
+  if (action === 'geocode') {
+    const loc = await geocode(q.q);
+    if (!loc) return res.status(200).json(successEnvelope(null));
+    return res.status(200).json(successEnvelope(loc));
+  }
   if (action !== 'search') {
     return res.status(200).json(successEnvelope({ service: 'geo', ok: true }));
   }
