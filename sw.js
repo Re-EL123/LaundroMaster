@@ -1,5 +1,5 @@
 /* LaundroMaster service worker: offline support + Web Push. */
-const VERSION = 'v16';
+const VERSION = 'v17';
 const CACHE = `lm-static-${VERSION}`;
 const SCOPE = self.registration.scope;
 
@@ -43,6 +43,27 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request).catch(() => caches.match(request).then((hit) => hit || caches.match('offline.html'))),
+    );
+    return;
+  }
+
+  // Scripts and styles are network-first so app/module updates roll out
+  // immediately (a cached stale module otherwise breaks new imports). Other
+  // same-origin assets stay stale-while-revalidate for speed.
+  const isCode = request.destination === 'script'
+    || request.destination === 'style'
+    || /\.(?:js|mjs|css)(?:$|\?)/.test(url.pathname);
+  if (isCode) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request).then((hit) => hit || Response.error())),
     );
     return;
   }

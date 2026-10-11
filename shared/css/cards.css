@@ -126,7 +126,7 @@
 .chart-area { animation: chart-fade var(--motion-panel) ease both; }
 .chart-line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: chart-draw 900ms ease forwards; }
 .chart-dot { fill: var(--color-panel); stroke-width: 2; cursor: pointer; transition: r var(--motion-fast) ease; }
-.chart-dot:hover, .chart-dot:focus { r: 5; outline: none; }
+.chart-dot:hover, .chart-dot:focus { r: 5px; outline: none; }
 .chart-empty { padding: var(--space-6); text-align: center; color: var(--color-muted); font-size: 0.9rem; }
 .chart-tip { position: absolute; transform: translate(-50%, -120%); background: #17171B; color: #fff; padding: 0.25rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.72rem; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity var(--motion-fast) ease; z-index: 5; }
 .chart-tip.is-visible { opacity: 1; }

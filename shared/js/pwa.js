@@ -34,7 +34,16 @@ export async function promptInstall() {
 
 export function register() {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+  const hadController = Boolean(navigator.serviceWorker.controller);
   navigator.serviceWorker.register(`${siteBase()}/sw.js`, { scope: `${siteBase()}/` }).catch(() => {});
+  // When an updated worker takes control, reload once so the page runs the
+  // fresh assets instead of the ones the previous worker already served.
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;
+    reloading = true;
+    window.location.reload();
+  });
 }
 
 // Wire an install button; returns a cleanup function.
