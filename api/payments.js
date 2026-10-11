@@ -7,7 +7,7 @@ import { paymentCreate, subscribePlan, cancelSubscription } from './_lib/validat
 import { getSettings, num } from './_lib/settings.js';
 import { activeSubscription, activateSubscription, round2 } from './_lib/pricing.js';
 import { reconcilePayment } from './_lib/billing.js';
-import { isConfigured, createPaymentLink, getPaymentStatus } from './_lib/ikhokha.js';
+import { isConfigured, createPaymentLink, getPaymentStatus } from './_lib/payfast.js';
 
 function bookingReturnUrls(req, bookingId, paymentId) {
   const base = process.env.PUBLIC_APP_URL || process.env.APP_BASE_URL || 'https://laundromaster.re-el.co.za';
@@ -161,7 +161,7 @@ export default createHandler(async function handler(req, res) {
         if (!payment) {
           const ins = await supa.from('payments').insert({
             booking_id, user_id: booking.customer_id, purpose: 'booking',
-            provider: 'ikhokha', amount: 0, currency: booking.currency || 'ZAR',
+            provider: 'payfast', amount: 0, currency: booking.currency || 'ZAR',
             status: 'succeeded', paid_at: new Date().toISOString(),
             idempotency_key: `booking:${booking_id}`,
           }).select().single();
@@ -189,7 +189,7 @@ export default createHandler(async function handler(req, res) {
       if (!payment) {
         const ins = await supa.from('payments').insert({
           booking_id, user_id: booking.customer_id, purpose: 'booking',
-          provider: 'ikhokha', amount, currency: booking.currency || 'ZAR',
+          provider: 'payfast', amount, currency: booking.currency || 'ZAR',
           status: 'created', idempotency_key: `booking:${booking_id}`,
         }).select().single();
         if (ins.error && ins.error.code === '23505') {
@@ -234,7 +234,7 @@ export default createHandler(async function handler(req, res) {
         purpose: 'subscription',
         plan_id: plan.id,
         audience: plan.audience,
-        provider: 'ikhokha',
+        provider: 'payfast',
         amount: price,
         currency: plan.currency || 'ZAR',
         status: 'created',

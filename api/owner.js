@@ -392,21 +392,21 @@ export default createHandler(async function handler(req, res) {
         await supa.from('transactions').insert({ laundromat_id, type: 'promotion', amount: 0, currency: settings.currency || 'ZAR' });
         return res.status(201).json(successEnvelope({ promotion: data, paid: true, checkout_url: null, amount: 0 }));
       }
-      const configured = await Promise.resolve((await import('./_lib/ikhokha.js')).isConfigured());
+      const configured = await Promise.resolve((await import('./_lib/payfast.js')).isConfigured());
       if (!configured) {
         return res.status(503).json(errorEnvelope(new ApiError('GATEWAY_NOT_CONFIGURED', 'Online payments are temporarily unavailable. Please try again later.', 503)));
       }
       const { data: payment, error: payErr } = await supa.from('payments').insert({
         user_id: ctx.user.id,
         purpose: 'promotion',
-        provider: 'ikhokha',
+        provider: 'payfast',
         amount: price,
         currency: settings.currency || 'ZAR',
         status: 'created',
         metadata: { laundromat_id, owner_id: ctx.user.id, kind, days },
       }).select().single();
       if (payErr) return res.status(400).json(errorEnvelope(payErr));
-      const { createPaymentLink } = await import('./_lib/ikhokha.js');
+      const { createPaymentLink } = await import('./_lib/payfast.js');
       const page = `${appBase()}/apps/owner/pages/promotions.html`;
       const q = `payment=${encodeURIComponent(payment.id)}`;
       const urls = {

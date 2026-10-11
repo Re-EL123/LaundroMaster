@@ -5,7 +5,7 @@ const SUCCESS_STATES = new Set(['success', 'succeeded', 'paid', 'complete', 'com
 const FAILURE_STATES = new Set(['failure', 'failed', 'declined', 'error', 'cancelled', 'canceled']);
 const PENDING_STATES = new Set(['pending', 'created', 'processing', 'initiated']);
 
-// Normalise an iKhokha status string/code into our internal payment status.
+// Normalise an PayFast status string/code into our internal payment status.
 export function normalizeStatus(raw) {
   const s = String(raw || '').trim().toLowerCase();
   if (SUCCESS_STATES.has(s)) return 'succeeded';

@@ -2,7 +2,7 @@ import { createHandler } from './_lib/handler.js';
 import { successEnvelope, errorEnvelope, ApiError } from './_lib/errors.js';
 import { adminClient } from './_lib/supabase-admin.js';
 import { body } from './_lib/req.js';
-import { ikhokhaConfig, verifyWebhookSignature } from './_lib/ikhokha.js';
+import { payfastConfig, verifyWebhookSignature } from './_lib/payfast.js';
 import { reconcilePayment, normalizeStatus } from './_lib/billing.js';
 
 function requestPathname(req) {
@@ -18,13 +18,13 @@ export default createHandler(async function handler(req, res) {
     return res.status(405).json(errorEnvelope(new ApiError('METHOD_NOT_ALLOWED', 'Method not allowed', 405)));
   }
 
-  const { appId, webhookSecret } = ikhokhaConfig();
+  const { appId, webhookSecret } = payfastConfig();
   if (!webhookSecret) return res.status(503).json(errorEnvelope(new ApiError('NOT_CONFIGURED', 'Webhook secret not configured', 503)));
 
   const payload = body(req);
   // Prefer the exact raw string when available; Vercel may parse JSON for us.
   const raw = typeof req.body === 'string' ? req.body : JSON.stringify(payload || {});
-  const signature = req.headers['ik-sign'] || req.headers['x-ikhokha-signature'] || req.headers['x-signature'];
+  const signature = req.headers['ik-sign'] || req.headers['x-payfast-signature'] || req.headers['x-signature'];
   const headerAppId = req.headers['ik-appid'];
 
   if (headerAppId && appId && headerAppId !== appId) {
