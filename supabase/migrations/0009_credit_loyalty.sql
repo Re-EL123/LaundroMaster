@@ -100,7 +100,7 @@ begin
     return json_build_object('error', 'below_minimum');
   end if;
 
-  coalesce((select sum(points) from loyalty_events where user_id = p_user_id), 0) into v_balance;
+  select coalesce(sum(points), 0) into v_balance from loyalty_events where user_id = p_user_id;
   if v_balance < p_points then
     return json_build_object('error', 'insufficient_points');
   end if;
