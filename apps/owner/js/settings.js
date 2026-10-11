@@ -21,10 +21,11 @@ import { openHoursEditor, openZonesEditor } from '../../../shared/js/operations.
   ]);
 
   if (meRes.status === 'fulfilled') {
-    const data = meRes.value;
-    document.getElementById('full_name').value = data.user.full_name || '';
-    document.getElementById('email').value = data.user.email || '';
-    document.getElementById('phone').value = data.user.phone || '';
+    const envelope = meRes.value;
+    const profile = envelope.data || envelope;
+    document.getElementById('full_name').value = (profile.user && profile.user.full_name) || (profile.full_name) || '';
+    document.getElementById('email').value = (profile.user && profile.user.email) || (profile.email) || document.getElementById('email').value || '';
+    document.getElementById('phone').value = (profile.user && profile.user.phone) || (profile.phone) || '';
   } else {
     msg.textContent = (meRes.reason && meRes.reason.message) || 'Failed to load profile.';
     msg.className = 'form-msg is-error';

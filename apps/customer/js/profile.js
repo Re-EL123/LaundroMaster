@@ -15,7 +15,8 @@ async function load() {
   if (!session) return;
   try {
     const { data } = await api.get('/auth?action=me');
-    const user = data.user;
+    const payload = data.data || data;
+    const user = payload.user || payload;
     document.getElementById('full_name').value = user.full_name || '';
     document.getElementById('email').value = user.email || '';
     document.getElementById('phone').value = user.phone || '';
@@ -215,7 +216,8 @@ async function loadAddresses() {
   if (!addressList) return;
   try {
     const { data } = await api.get('/auth?action=me');
-    savedAddresses = data.user.addresses || [];
+    const payload = data.data || data;
+    savedAddresses = (payload.user && payload.user.addresses) || payload.addresses || [];
     renderAddresses();
   } catch (err) {
     addressList.innerHTML = `<p class="text-muted text-sm">${escapeHtml(err.message || 'Could not load addresses.')}</p>`;
