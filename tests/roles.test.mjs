@@ -5,6 +5,8 @@ import {
   staffUpdate,
   staffRemove,
   capacityUpdate,
+  hoursUpdate,
+  zonesUpdate,
   addressSave,
   bookingAssignStaff,
   bookingMessage,
@@ -40,6 +42,23 @@ test('capacityUpdate accepts nullable max orders and rejects negatives', () => {
   assert.equal(ok.success, true);
   assert.equal(capacityUpdate.safeParse({ laundromat_id: uuid, max_orders_per_day: -1 }).success, false);
   assert.equal(capacityUpdate.safeParse({ laundromat_id: uuid, extra_delivery_fee: -5 }).success, false);
+});
+
+test('hoursUpdate accepts weekday rows and rejects invalid times and weekdays', () => {
+  const ok = hoursUpdate.safeParse({ laundromat_id: uuid, hours: [{ weekday: 1, open_time: '08:00', close_time: '17:00', is_closed: false }] });
+  assert.equal(ok.success, true);
+  assert.equal(ok.data.hours[0].is_closed, false);
+  assert.equal(hoursUpdate.safeParse({ laundromat_id: uuid, hours: [{ weekday: 7 }] }).success, false);
+  assert.equal(hoursUpdate.safeParse({ laundromat_id: uuid, hours: [{ weekday: 1, open_time: '8am' }] }).success, false);
+  assert.equal(hoursUpdate.safeParse({ laundromat_id: uuid, hours: [] }).success, true);
+});
+
+test('zonesUpdate defaults fee and rejects negatives', () => {
+  const ok = zonesUpdate.safeParse({ laundromat_id: uuid, zones: [{ name: 'Central', radius_km: 5 }] });
+  assert.equal(ok.success, true);
+  assert.equal(ok.data.zones[0].fee, 0);
+  assert.equal(zonesUpdate.safeParse({ laundromat_id: uuid, zones: [{ radius_km: -1 }] }).success, false);
+  assert.equal(zonesUpdate.safeParse({ laundromat_id: uuid, zones: [{ fee: -5 }] }).success, false);
 });
 
 test('addressSave allows an empty list but requires a street address otherwise', () => {

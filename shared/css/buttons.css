@@ -5,4 +5,5 @@
 .btn-secondary { background: var(--color-panel); color: var(--color-ink); border-color: var(--color-border); }
 .btn-ghost { background: transparent; color: var(--color-ink); }
 .btn-danger { background: var(--color-danger); color: var(--color-white); }
+.btn-sm { padding: 0.35rem 0.7rem; font-size: 0.8rem; }
 @media (hover:hover) and (pointer:fine) { .btn-primary:hover:not(:disabled){ filter: brightness(0.95); transform: translateY(-1px); } .btn-secondary:hover:not(:disabled){ background: var(--color-surface); } }

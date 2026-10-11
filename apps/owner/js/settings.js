@@ -3,6 +3,7 @@ import { toast, confirmAction, emptyState } from '../../../shared/js/ui.js';
 import { escapeHtml } from '../../../shared/js/format.js';
 import { mountDashboard } from '../../../shared/js/shell.js';
 import { mountBranding } from '../../../shared/js/branding.js';
+import { openHoursEditor, openZonesEditor } from '../../../shared/js/operations.js';
 
 (async function () {
   const user = await mountDashboard({ allowed: ['owner', 'staff', 'admin', 'super_admin'] });
@@ -111,14 +112,39 @@ import { mountBranding } from '../../../shared/js/branding.js';
     });
   }
 
+  function initOperations() {
+    const wrap = document.getElementById('operationsList');
+    if (!owned.length) {
+      emptyState(wrap, 'No laundromats to configure.');
+      return;
+    }
+    wrap.innerHTML = owned.map((l) => `<article class="card"><div class="card-body">
+      <h3 class="card-title">${escapeHtml(l.name)}</h3>
+      <p class="text-muted text-sm">Set the weekly opening hours and the areas you deliver to.</p>
+      <div class="flex mt-4">
+        <button class="btn btn-secondary" data-hours="${l.id}">Configure hours</button>
+        <button class="btn btn-secondary" data-zones="${l.id}">Configure delivery zones</button>
+      </div>
+    </div></article>`).join('');
+
+    wrap.addEventListener('click', (e) => {
+      const hoursBtn = e.target.closest('[data-hours]');
+      const zonesBtn = e.target.closest('[data-zones]');
+      if (hoursBtn) openHoursEditor(hoursBtn.dataset.hours);
+      else if (zonesBtn) openZonesEditor(zonesBtn.dataset.zones);
+    });
+  }
+
   if (isOwner) {
     document.getElementById('teamSection').hidden = false;
     document.getElementById('availabilitySection').hidden = false;
+    document.getElementById('operationsSection').hidden = false;
     document.getElementById('inviteBiz').innerHTML = owned
       .map((l) => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
 
     loadTeam();
     initCapacity();
+    initOperations();
 
     document.getElementById('inviteForm').addEventListener('submit', async (e) => {
       e.preventDefault();

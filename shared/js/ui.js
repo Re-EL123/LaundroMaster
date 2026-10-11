@@ -179,3 +179,92 @@ export function observeEnhancements() {
 export function confirmAction(message) {
   return typeof window !== 'undefined' && window.confirm(message);
 }
+
+// Accessible modal dialog. `body` may be an HTML string or a Node. `actions`
+// is a list of { label, variant, id, close, onClick(handle) }; a button stays
+// open when close===false. Returns a handle: { overlay, dialog, body, footer, close }.
+export function openModal({ title, body, actions = [], size = '', dismissible = true, onClose } = {}) {
+  const previouslyFocused = typeof document !== 'undefined' ? document.activeElement : null;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-backdrop';
+
+  const dialog = document.createElement('div');
+  dialog.className = `modal${size ? ` modal-${size}` : ''}`;
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  if (title) dialog.setAttribute('aria-label', title);
+
+  const header = document.createElement('div');
+  header.className = 'modal-header';
+  const titleEl = document.createElement('h3');
+  titleEl.className = 'modal-title';
+  titleEl.textContent = title || '';
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'modal-close';
+  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.textContent = '×';
+  if (title) header.appendChild(titleEl);
+  if (dismissible) header.appendChild(closeBtn);
+
+  const bodyEl = document.createElement('div');
+  bodyEl.className = 'modal-body';
+  if (typeof body === 'string') bodyEl.innerHTML = body;
+  else if (body instanceof Node) bodyEl.appendChild(body);
+
+  const footer = document.createElement('div');
+  footer.className = 'modal-footer';
+
+  if (title || dismissible) dialog.appendChild(header);
+  dialog.appendChild(bodyEl);
+  dialog.appendChild(footer);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+  document.body.classList.add('modal-open');
+
+  const handle = { overlay, dialog, body: bodyEl, footer, close };
+
+  function close() {
+    document.removeEventListener('keydown', onKey);
+    overlay.classList.remove('is-open');
+    const remove = () => {
+      overlay.remove();
+      if (!document.querySelector('.modal-backdrop')) document.body.classList.remove('modal-open');
+    };
+    if (reduceMotion()) remove();
+    else setTimeout(remove, 180);
+    onClose?.();
+    if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus({ preventScroll: true });
+  }
+
+  function onKey(e) {
+    if (e.key === 'Escape' && dismissible) { e.preventDefault(); close(); }
+  }
+
+  closeBtn.addEventListener('click', close);
+  if (dismissible) overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', onKey);
+
+  actions.forEach((a) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `btn btn-${a.variant || 'secondary'}`;
+    if (a.id) b.id = a.id;
+    b.textContent = a.label;
+    b.addEventListener('click', () => {
+      const res = a.onClick ? a.onClick(handle) : undefined;
+      if (a.close !== false && res !== false) close();
+    });
+    footer.appendChild(b);
+  });
+  if (!actions.length) footer.remove();
+
+  requestAnimationFrame(() => {
+    overlay.classList.add('is-open');
+    const focusable = dialog.querySelector('input, select, textarea, button:not(.modal-close)') || (!dismissible ? dialog : closeBtn);
+    if (focusable) focusable.focus({ preventScroll: true });
+  });
+
+  return handle;
+}

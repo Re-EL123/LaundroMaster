@@ -5,7 +5,7 @@ import { query, body } from './_lib/req.js';
 import { requireRoles } from './_lib/auth.js';
 import {
   serviceCreate, serviceUpdate, promotionCreate, payoutRequest, ownerLaundromatUpdate,
-  staffInvite, staffUpdate, staffRemove, capacityUpdate,
+  staffInvite, staffUpdate, staffRemove, capacityUpdate, hoursUpdate, zonesUpdate,
 } from './_lib/validation.js';
 import { getSettings, num } from './_lib/settings.js';
 import { round2, activeSubscription, defaultPlan } from './_lib/pricing.js';
@@ -174,6 +174,22 @@ export default createHandler(async function handler(req, res) {
     if (action === 'services') {
       if (!ids.length) return res.status(200).json(successEnvelope([]));
       const { data, error } = await supa.from('services').select('*').in('laundromat_id', ids).order('created_at', { ascending: false });
+      if (error) return res.status(500).json(errorEnvelope(error));
+      return res.status(200).json(successEnvelope(data || []));
+    }
+
+    if (action === 'hours') {
+      const laundromat_id = q.laundromat_id;
+      if (!ids.includes(laundromat_id)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
+      const { data, error } = await supa.from('operating_hours').select('*').eq('laundromat_id', laundromat_id).order('weekday');
+      if (error) return res.status(500).json(errorEnvelope(error));
+      return res.status(200).json(successEnvelope(data || []));
+    }
+
+    if (action === 'zones') {
+      const laundromat_id = q.laundromat_id;
+      if (!ids.includes(laundromat_id)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
+      const { data, error } = await supa.from('delivery_zones').select('*').eq('laundromat_id', laundromat_id).order('fee');
       if (error) return res.status(500).json(errorEnvelope(error));
       return res.status(200).json(successEnvelope(data || []));
     }
@@ -431,6 +447,47 @@ export default createHandler(async function handler(req, res) {
       const { data, error } = await supa.from('laundromats').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', laundromat_id).select().single();
       if (error) return res.status(400).json(errorEnvelope(error));
       return res.status(200).json(successEnvelope(data));
+    }
+
+    if (action === 'hours-update') {
+      if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can edit operating hours', 403)));
+      const parsed = hoursUpdate.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const { laundromat_id, hours } = parsed.data;
+      if (!ownedIds.includes(laundromat_id)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
+      const rows = hours.map((h) => ({
+        laundromat_id,
+        weekday: h.weekday,
+        open_time: h.is_closed ? null : (h.open_time || null),
+        close_time: h.is_closed ? null : (h.close_time || null),
+        is_closed: h.is_closed,
+      }));
+      const { error } = rows.length
+        ? await supa.from('operating_hours').upsert(rows, { onConflict: 'laundromat_id,weekday' })
+        : { error: null };
+      if (error) return res.status(400).json(errorEnvelope(error));
+      return res.status(200).json(successEnvelope({ saved: rows.length }));
+    }
+
+    if (action === 'zones-update') {
+      if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can edit delivery zones', 403)));
+      const parsed = zonesUpdate.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const { laundromat_id, zones } = parsed.data;
+      if (!ownedIds.includes(laundromat_id)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
+      const { error: delError } = await supa.from('delivery_zones').delete().eq('laundromat_id', laundromat_id);
+      if (delError) return res.status(400).json(errorEnvelope(delError));
+      const rows = zones.map((z) => ({
+        laundromat_id,
+        name: z.name || null,
+        radius_km: z.radius_km == null ? null : z.radius_km,
+        fee: z.fee || 0,
+      }));
+      if (rows.length) {
+        const { error } = await supa.from('delivery_zones').insert(rows);
+        if (error) return res.status(400).json(errorEnvelope(error));
+      }
+      return res.status(200).json(successEnvelope({ saved: rows.length }));
     }
 
     return res.status(405).json(errorEnvelope(new ApiError('METHOD_NOT_ALLOWED', 'Method not allowed', 405)));

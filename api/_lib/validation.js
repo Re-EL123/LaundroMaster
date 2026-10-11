@@ -229,6 +229,25 @@ export const capacityUpdate = z.object({
   extra_delivery_fee: z.number().nonnegative().optional(),
 });
 
+export const hoursUpdate = z.object({
+  laundromat_id: uuid,
+  hours: z.array(z.object({
+    weekday: z.number().int().min(0).max(6),
+    open_time: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+    close_time: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+    is_closed: z.boolean().default(false),
+  })).max(7),
+});
+
+export const zonesUpdate = z.object({
+  laundromat_id: uuid,
+  zones: z.array(z.object({
+    name: z.string().max(120).nullable().optional(),
+    radius_km: z.number().nonnegative().nullable().optional(),
+    fee: z.number().nonnegative().optional().default(0),
+  })).max(30),
+});
+
 /* ---------- Customer: addresses, loyalty, referrals ---------- */
 
 export const addressSave = z.object({

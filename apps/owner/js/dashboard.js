@@ -1,9 +1,19 @@
 import { api } from '../../../shared/js/api-client.js';
 import { escapeHtml, currency, relativeTime, statusLabel, statusTone } from '../../../shared/js/format.js';
-import { badge, emptyState, statTile, animateCounts, initReveal } from '../../../shared/js/ui.js';
+import { badge, emptyState, statTile, animateCounts, initReveal, openModal } from '../../../shared/js/ui.js';
 import { lineChart, hbarChart, initCharts } from '../../../shared/js/charts.js';
-import { swr } from '../../../shared/js/cache.js';
+import { swr, cacheClear, cacheSet } from '../../../shared/js/cache.js';
+import { openHoursEditor, openZonesEditor } from '../../../shared/js/operations.js';
 import { mountDashboard } from '../../../shared/js/shell.js';
+
+const FIX_META = {
+  profile: { label: 'Edit details', href: 'pages/settings.html' },
+  description: { label: 'Add description', href: 'pages/settings.html' },
+  logo: { label: 'Upload logo', href: 'pages/settings.html' },
+  services: { label: 'Add services', href: 'pages/services.html' },
+  hours: { label: 'Set hours' },
+  zones: { label: 'Add zones' },
+};
 
 (async function () {
   const user = await mountDashboard({ allowed: ['owner', 'staff', 'admin', 'super_admin'] });
@@ -17,6 +27,31 @@ import { mountDashboard } from '../../../shared/js/shell.js';
   const topServicesEl = document.getElementById('topServices');
   const rangeFilter = document.getElementById('rangeFilter');
   let range = '6m';
+  let setupPromptSig = null;
+
+  function runFix(key, laundromatId) {
+    const meta = FIX_META[key];
+    if (!meta) return;
+    if (meta.href) { location.href = meta.href; return; }
+    if (key === 'hours') openHoursEditor(laundromatId, { onSaved: reloadSetup });
+    else if (key === 'zones') openZonesEditor(laundromatId, { onSaved: reloadSetup });
+  }
+
+  if (checklistEl) {
+    checklistEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-fix]');
+      if (btn) runFix(btn.dataset.fix, btn.dataset.laundromat);
+    });
+  }
+
+  async function reloadSetup() {
+    cacheClear('owner:verification');
+    try {
+      const { data } = await api.get('/owner?action=verification');
+      cacheSet('owner:verification', data);
+      paintVerification(data);
+    } catch { /* keep current view */ }
+  }
 
   // Shaped skeletons while the first paint loads.
   statsEl.innerHTML = Array.from({ length: 4 })
@@ -54,12 +89,43 @@ import { mountDashboard } from '../../../shared/js/shell.js';
       bannerEl.innerHTML = '<div class="banner banner-success"><div><strong>You are all set</strong><p class="text-sm">Your listing is live and complete.</p></div></div>';
     }
     const items = primary.checks.map((c) => `<div class="checklist-item${c.done ? ' is-done' : ''}">
-      <span class="checklist-mark">${c.done ? '✓' : ''}</span>
+      <span class="checklist-mark${c.done ? '' : ' is-todo'}">${c.done ? '✓' : '!'}</span>
       <span class="checklist-text">${escapeHtml(c.label)}</span>
+      ${c.done ? '' : `<button type="button" class="btn btn-secondary btn-sm" data-fix="${c.key}" data-laundromat="${primary.id}">${escapeHtml((FIX_META[c.key] || {}).label || 'Complete')}</button>`}
     </div>`).join('');
     checklistEl.innerHTML = `<div class="flex justify-between"><h2 class="card-title">Setup checklist</h2><span class="text-sm text-muted">${primary.done}/${primary.total}</span></div>
       <div class="meter-track mt-4"><div class="meter-fill" style="width:${primary.percent}%"></div></div>
       <div class="checklist mt-4">${items}</div>`;
+    maybeShowSetupPrompt(primary);
+  }
+
+  function maybeShowSetupPrompt(primary) {
+    const missing = (primary.checks || []).filter((c) => !c.done);
+    if (!missing.length) return;
+    const sig = `${primary.id}:${primary.done}/${primary.total}`;
+    if (setupPromptSig === sig) return;
+    let dismissed = null;
+    try { dismissed = localStorage.getItem('lm_setup_dismissed'); } catch { /* private mode */ }
+    if (dismissed === sig) return;
+    setupPromptSig = sig;
+    const modal = openModal({
+      title: 'Finish setting up your business',
+      body: `<p class="text-muted">You're ${primary.percent}% done. Complete these steps to start receiving bookings.</p>
+        <div class="checklist mt-4">${missing.map((c) => `<div class="checklist-item">
+          <span class="checklist-mark is-todo">!</span>
+          <span class="checklist-text">${escapeHtml(c.label)}</span>
+          <button type="button" class="btn btn-primary btn-sm" data-fix="${c.key}" data-laundromat="${primary.id}">${escapeHtml((FIX_META[c.key] || {}).label || 'Complete')}</button>
+        </div>`).join('')}</div>`,
+      actions: [
+        { label: 'Later', variant: 'secondary', onClick: () => { try { localStorage.setItem('lm_setup_dismissed', sig); } catch { /* ignore */ } } },
+      ],
+    });
+    modal.body.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-fix]');
+      if (!btn) return;
+      modal.close();
+      runFix(btn.dataset.fix, btn.dataset.laundromat);
+    });
   }
 
   function paintAnalytics(data) {
