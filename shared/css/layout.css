@@ -121,3 +121,19 @@ body.modal-open { overflow: hidden; }
   .nav-icon .icon, .sidebar-collapse .icon, .btn .icon { transition: none; }
 }
 
+
+/* Responsive enhancements */
+:root { --container-padding: clamp(1rem, 4vw, 2rem); }
+.page-shell { width: min(100% - var(--container-padding), 80rem); }
+.grid { display: grid; gap: clamp(1rem, 3vw, 1.5rem); }
+.card-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
+.toolbar { flex-wrap: wrap; gap: clamp(.75rem, 2vw, 1rem); }
+.table-wrap { -webkit-overflow-scrolling: touch; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: clamp(.75rem, 2vw, 1rem); }
+@media (max-width: 480px) { .hide-xs { display: none !important; } }
+@media (max-width: 768px) { .hide-sm { display: none !important; } }
+@media (max-width: 1024px) { .hide-md { display: none !important; } }
+@media (max-width: 640px) {
+  .table th, .table td { padding: var(--space-2) var(--space-3); font-size: 0.875rem; }
+  .section-head { flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+}
