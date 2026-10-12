@@ -28,8 +28,11 @@ export default createHandler(async function handler(req, res) {
     if (!ALLOWED_BUCKETS.includes(bucket)) {
       return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Bucket not allowed')));
     }
+    if (bucket === 'verification-documents' && ctx.role !== 'admin' && ctx.role !== 'owner') {
+      return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Forbidden', 403)));
+    }
     const ext = (input.filename || '').split('.').pop() || 'bin';
-    const path = input.path || `${ctx.user.id}/${Date.now()}.${ext}`;
+    const path = String(input.path || '').trim() || `${ctx.user.id}/${Date.now()}.${ext}`;
 
     const { data, error } = await supa.storage.from(bucket).createSignedUploadUrl(path);
     if (error) return res.status(400).json(errorEnvelope(error));
@@ -41,6 +44,9 @@ export default createHandler(async function handler(req, res) {
     const path = q.path;
     if (!ALLOWED_BUCKETS.includes(bucket) || !path) {
       return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'bucket and path required')));
+    }
+    if (bucket === 'verification-documents' && ctx.role !== 'admin' && ctx.role !== 'owner') {
+      return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Forbidden', 403)));
     }
     const { data, error } = await supa.storage.from(bucket).createSignedUrl(path, 60 * 10);
     if (error) return res.status(400).json(errorEnvelope(error));

@@ -41,6 +41,28 @@ function toCents(amount) {
   return Math.round(Number(amount || 0) * 100);
 }
 
+
+export async function validatePayment({ m_payment_id, payment_id, amount_gross } = {}) {
+  const cfg = payfastConfig();
+  if (!isConfigured() || !m_payment_id) return { valid: false };
+  const params = {
+    merchant_id: cfg.merchantId,
+    merchant_key: cfg.merchantKey,
+    m_payment_id,
+  };
+  const sig = signPayload(params, cfg.passphrase);
+  const query = Object.keys(params).filter(k => params[k]).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join('&') + `&signature=${encodeURIComponent(sig)}`;
+  const base = cfg.mode === 'live' ? cfg.baseUrl : 'https://sandbox.payfast.co.za';
+  const url = `${base}/eng/query/validate?${query}`;
+  try {
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) return { valid: false };
+    const data = await res.json();
+    if (data && data.code === '000') return { valid: true, data };
+  } catch {}
+  return { valid: false };
+}
+
 // Create a hosted PayFast payment. Returns minimal shape compatible with existing callers.
 // PayFast expects a form POST to /eng/process; here we return a checkout_url that the
 // client can redirect to, containing signed parameters.
@@ -94,20 +116,37 @@ export async function createPaymentLink({
   };
 }
 
-// PayFast hosted payments don't expose a paylink status lookup via a simple ID in the same way;
-// webhooks provide authoritative status. Return null to keep existing reconciliation flow.
+// Look up payment status via validate endpoint if possible.
 export async function getPaymentStatus(paylinkId) {
+  if (!paylinkId) return null;
+  const res = await validatePayment({ m_payment_id: paylinkId });
+  if (res && res.valid && res.data) {
+    return { status: res.data.status || res.data.payment_status || null, data: res.data };
+  }
   return null;
 }
 
 // Verify PayFast ITN signature (server-to-server). PayFast posts all fields; signature
 // is the MD5 of the concatenated sorted key=value pairs, excluding the signature field itself.
-export function verifyWebhookSignature({ body = {}, signature, rawBody, pathname } = {}) {
-  if (!signature || typeof body !== 'object') return false;
+export function verifyWebhookSignature({ body = {}, signature, headers = {} } = {}) {
+  const sig = signature || body.signature || body.SIGNATURE || headers['x-payfast-signature'] || headers['X-PayFast-Signature'] || headers.signature;
+  if (!sig || typeof body !== 'object') return false;
+  const params = { ...body };
   const cfg = payfastConfig();
-  const expected = signPayload(body, cfg.passphrase);
-  const a = Buffer.from(expected);
-  const b = Buffer.from(String(signature));
-  return a.length === b.length && timingSafeEqual(a, b);
+  const expected1 = signPayload(params, cfg.passphrase);
+  const expected2 = signPayload(params, cfg.passphrase ? cfg.passphrase : undefined);
+  const candidates = [expected1, expected2];
+  // also try without passphrase
+  candidates.push(signPayload(params));
+  const b = Buffer.from(String(sig));
+  for (const c of candidates) {
+    const a = Buffer.from(c);
+    if (a.length === b.length) {
+      try {
+        if (timingSafeEqual(a, b)) return true;
+      } catch {}
+    }
+  }
+  // try case-insensitive? maybe
+  return false;
 }
-

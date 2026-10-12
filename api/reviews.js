@@ -35,10 +35,22 @@ export default createHandler(async function handler(req, res) {
     const ctx = await requireUser(req);
     const parsed = reviewCreate.safeParse(body(req));
     if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
-    const payload = { ...parsed.data, customer_id: ctx.user.id, moderation_status: 'published' };
+    const p = parsed.data;
+    // validate booking
+    if (p.booking_id) {
+      const { data: b } = await supa.from('bookings').select('id,customer_id,status,laundromat_id').eq('id', p.booking_id).single();
+      if (!b || b.customer_id !== ctx.user.id || String(b.status).toLowerCase() !== 'completed' || b.laundromat_id !== p.laundromat_id) {
+        return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Invalid booking for review', 403)));
+      }
+      const { data: ex } = await supa.from('reviews').select('id').eq('booking_id', p.booking_id).limit(1);
+      if (ex && ex.length > 0) {
+        return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Review exists', 400)));
+      }
+    }
+    const payload = { ...p, customer_id: ctx.user.id, moderation_status: 'pending' };
     const { data, error } = await supa.from('reviews').insert(payload).select().single();
     if (error) return res.status(400).json(errorEnvelope(error));
-    await recomputeRating(supa, payload.laundromat_id);
+    // don't recompute rating for pending reviews? recompute only published; skip
     return res.status(201).json(successEnvelope(data));
   }
 

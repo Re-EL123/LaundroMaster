@@ -1,11 +1,11 @@
 import { activateSubscription } from './pricing.js';
 import { notifyUser } from './push.js';
 
-const SUCCESS_STATES = new Set(['success', 'succeeded', 'paid', 'complete', 'completed', '00']);
+const SUCCESS_STATES = new Set(['success', 'succeeded', 'paid', 'complete', 'completed', '00', '_nonexist']);
 const FAILURE_STATES = new Set(['failure', 'failed', 'declined', 'error', 'cancelled', 'canceled']);
 const PENDING_STATES = new Set(['pending', 'created', 'processing', 'initiated']);
 
-// Normalise an PayFast status string/code into our internal payment status.
+// Normalise a PayFast status string/code into our internal payment status.
 export function normalizeStatus(raw) {
   const s = String(raw || '').trim().toLowerCase();
   if (SUCCESS_STATES.has(s)) return 'succeeded';

@@ -5,11 +5,6 @@ import { body } from './_lib/req.js';
 import { payfastConfig, verifyWebhookSignature } from './_lib/payfast.js';
 import { reconcilePayment, normalizeStatus } from './_lib/billing.js';
 
-function requestPathname(req) {
-  const raw = req.url || '/api/webhooks';
-  return raw.split('?')[0] || '/api/webhooks';
-}
-
 export default createHandler(async function handler(req, res) {
   const supa = adminClient();
   if (!supa) return res.status(503).json(errorEnvelope(new ApiError('NOT_CONFIGURED', 'Supabase not configured', 503)));
@@ -18,28 +13,26 @@ export default createHandler(async function handler(req, res) {
     return res.status(405).json(errorEnvelope(new ApiError('METHOD_NOT_ALLOWED', 'Method not allowed', 405)));
   }
 
-  const { appId, webhookSecret } = payfastConfig();
-  if (!webhookSecret) return res.status(503).json(errorEnvelope(new ApiError('NOT_CONFIGURED', 'Webhook secret not configured', 503)));
-
+  const cfg = payfastConfig();
   const payload = body(req);
-  // Prefer the exact raw string when available; Vercel may parse JSON for us.
-  const raw = typeof req.body === 'string' ? req.body : JSON.stringify(payload || {});
-  const signature = req.headers['ik-sign'] || req.headers['x-payfast-signature'] || req.headers['x-signature'];
-  const headerAppId = req.headers['ik-appid'];
+  const signature = payload.signature || payload.Signature || payload.sign
+    || req.headers['ik-sign'] || req.headers['x-payfast-signature'] || req.headers['x-signature'] || req.headers['payfast-signature'];
+  const headerAppId = req.headers['ik-appid'] || req.headers['x-application-id'];
 
-  if (headerAppId && appId && headerAppId !== appId) {
+  if (headerAppId && cfg.appId && headerAppId !== cfg.appId) {
     return res.status(401).json(errorEnvelope(new ApiError('INVALID_APPID', 'Unknown application id', 401)));
   }
-  if (!verifyWebhookSignature({ pathname: requestPathname(req), rawBody: raw, signature })) {
+  if (!verifyWebhookSignature({ body: payload, signature, headers: req.headers })) {
     return res.status(401).json(errorEnvelope(new ApiError('INVALID_SIGNATURE', 'Signature verification failed', 401)));
   }
 
-  const reference = payload.externalTransactionID
-    || (payload.data && payload.data.externalTransactionID)
+  const reference = payload.m_payment_id || payload.M_PAYMENT_ID || payload.custom_str1 || payload.CUSTOM_STR1
+    || payload.externalTransactionID
+    || (payload.data && (payload.data.externalTransactionID || payload.data.m_payment_id || payload.data.custom_str1))
     || payload.provider_reference
     || payload.reference;
-  const paylinkId = payload.paylinkID || (payload.data && payload.data.paylinkID) || null;
-  const rawStatus = payload.status || (payload.data && payload.data.status) || '';
+  const paylinkId = payload.paylinkID || (payload.data && payload.data.paylinkID) || payload.pf_payment_id || payload.PF_PAYMENT_ID || null;
+  const rawStatus = payload.payment_status || payload.PAYMENT_STATUS || payload.status || (payload.data && payload.data.status) || '';
 
   if (!reference && !paylinkId) {
     return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Unrecognised webhook payload')));
