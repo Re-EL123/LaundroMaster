@@ -11,8 +11,8 @@ export function payfastConfig() {
   const merchantKey = (process.env.PAYFAST_MERCHANT_KEY || process.env.PAYFAST_API_KEY || '').trim();
   const passphrase = (process.env.PAYFAST_PASSPHRASE || process.env.PAYFAST_WEBHOOK_SECRET || '').trim();
   const baseUrl = (process.env.PAYFAST_BASE_URL || 'https://www.payfast.co.za').replace(/\/$/, '');
-  const mode = process.env.PAYFAST_MODE === 'live' || process.env.PAYFAST_MODE === 'live' ? 'live' : 'test';
-  return { merchantId, merchantKey, passphrase, baseUrl, mode };
+  const mode = process.env.PAYFAST_MODE === 'live' ? 'live' : 'test';
+  return { merchantId, merchantKey, passphrase, baseUrl, mode, appId: process.env.PAYFAST_MERCHANT_ID || process.env.PAYFAST_APP_ID || '' };
 }
 
 export function isConfigured() {
@@ -21,9 +21,19 @@ export function isConfigured() {
 }
 
 import { createHash } from 'node:crypto';
-export function signPayload(params) {
-  const entries = Object.keys(params).filter(k => params[k] !== undefined && params[k] !== null).sort();
-  const str = entries.map(k => `${k}=${params[k]}`).join('&');
+export function signPayload(params, passphrase = null) {
+  const data = { ...(params || {}) };
+  const pass = passphrase !== null && passphrase !== undefined ? String(passphrase).trim() : '';
+  const entries = Object.keys(data)
+    .filter((k) => k !== 'signature')
+    .filter((k) => data[k] !== undefined && data[k] !== null && String(data[k]).trim() !== '')
+    .sort();
+  let str = entries
+    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(String(data[k]).trim())}`)
+    .join('&');
+  if (pass) {
+    str = `${str}${str ? '&' : ''}passphrase=${encodeURIComponent(pass)}`;
+  }
   return createHash('md5').update(str).digest('hex');
 }
 
@@ -71,8 +81,8 @@ export async function createPaymentLink({
   };
 
   const pfBase = cfg.mode === 'live' ? cfg.baseUrl : 'https://sandbox.payfast.co.za';
-  let query = Object.keys(params).filter(k => params[k]).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join('&');
-  const sig = signPayload(params);
+  let query = Object.keys(params).filter(k => params[k] !== undefined && params[k] !== null && params[k] !== '').map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join('&');
+  const sig = signPayload(params, cfg.passphrase);
   if (query) query += `&signature=${encodeURIComponent(sig)}`;
 
   return {
@@ -92,18 +102,10 @@ export async function getPaymentStatus(paylinkId) {
 
 // Verify PayFast ITN signature (server-to-server). PayFast posts all fields; signature
 // is the MD5 of the concatenated sorted key=value pairs, excluding the signature field itself.
-export function verifyWebhookSignature({ body = {}, signature } = {}) {
+export function verifyWebhookSignature({ body = {}, signature, rawBody, pathname } = {}) {
   if (!signature || typeof body !== 'object') return false;
-  const params = { ...body };
-  delete params.signature;
-  delete params.m_payment_id; // sometimes included; not part of signing string in typical cases
   const cfg = payfastConfig();
-  const entries = Object.keys(params).filter(k => params[k] !== undefined && params[k] !== '').sort();
-  let str = entries.map(k => `${k}=${params[k]}`).join('&');
-  if (cfg.passphrase) {
-    str = `${str}&passphrase=${cfg.passphrase}`;
-  }
-  const expected = createHash('md5').update(str).digest('hex');
+  const expected = signPayload(body, cfg.passphrase);
   const a = Buffer.from(expected);
   const b = Buffer.from(String(signature));
   return a.length === b.length && timingSafeEqual(a, b);
