@@ -193,6 +193,16 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
       return res.status(200).json(successEnvelope(out));
     }
 
+    if (action === 'team' || action === 'staff') {
+      if (!ownedIds.length) return res.status(200).json(successEnvelope([]));
+      const { data, error } = await supa.from('laundromat_members')
+        .select('*, profiles!laundromat_members_user_id_fkey(id, full_name, email)')
+        .in('laundromat_id', ownedIds)
+        .order('created_at', { ascending: false });
+      if (error) return res.status(500).json(errorEnvelope(error));
+      return res.status(200).json(successEnvelope(data || []));
+    }
+
     if (action === 'services') {
       if (!ids.length) return res.status(200).json(successEnvelope([]));
       const { data, error } = await supa.from('services').select('*').in('laundromat_id', ids).order('created_at', { ascending: false });
