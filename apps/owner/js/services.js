@@ -5,7 +5,7 @@ import { mountDashboard } from '../../../shared/js/shell.js';
 import { uploadImage, publicUrl } from '../../../shared/js/uploads.js';
 
 (async function () {
-  const user = await mountDashboard({ allowed: ['owner', 'staff', 'admin', 'super_admin'] });
+  const user = await mountDashboard({ allowed: ['owner', 'admin', 'super_admin'] });
   if (!user) return;
 
   const list = document.getElementById('list');

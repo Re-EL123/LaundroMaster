@@ -65,8 +65,16 @@ export async function mountDashboard({ allowed, sidebarSelector = '.side-nav' } 
   if (!user) return null;
 
   const current = location.pathname.split('/').pop() || 'index.html';
+  const role = user.role;
+  const OWNER_ONLY_PAGES = ['services.html', 'promotions.html', 'plan.html'];
+  const hideForStaff = ['staff'].includes(role);
   document.querySelectorAll(`${sidebarSelector} a`).forEach((a) => {
     const href = a.getAttribute('href') || '';
+    const page = href.split('/').pop();
+    if (hideForStaff && OWNER_ONLY_PAGES.includes(page)) {
+      a.hidden = true;
+      return;
+    }
     if (href.endsWith(current)) {
       a.classList.add('is-active');
       a.setAttribute('aria-current', 'page');

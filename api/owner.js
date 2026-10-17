@@ -204,6 +204,7 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
     }
 
     if (action === 'services') {
+      if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can view services', 403)));
       if (!ids.length) return res.status(200).json(successEnvelope([]));
       const { data, error } = await supa.from('services').select('*').in('laundromat_id', ids).order('created_at', { ascending: false });
       if (error) return res.status(500).json(errorEnvelope(error));
@@ -363,6 +364,7 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
     }
 
     if (action === 'service-create') {
+      if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can manage services', 403)));
       const parsed = serviceCreate.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
       if (!ownedIds.includes(parsed.data.laundromat_id)) {
@@ -378,6 +380,7 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
     }
 
     if (action === 'service-update') {
+      if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can manage services', 403)));
       const parsed = serviceUpdate.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
       const { id, ...patch } = parsed.data;
@@ -391,6 +394,7 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
     }
 
     if (action === 'service-delete') {
+      if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can manage services', 403)));
       const id = body(req).id || q.id;
       if (!id) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing id')));
       const { data: svc } = await supa.from('services').select('laundromat_id').eq('id', id).maybeSingle();
