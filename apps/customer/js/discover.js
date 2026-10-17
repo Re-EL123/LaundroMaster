@@ -104,3 +104,5 @@ document.getElementById('nearBtn').addEventListener('click', () => {
 });
 
 search();
+
+renderAds();

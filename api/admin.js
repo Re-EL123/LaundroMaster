@@ -212,6 +212,12 @@ export default createHandler(async function handler(req, res) {
       return res.status(200).json(successEnvelope(data || []));
     }
 
+    if (action === 'ads') {
+      const { data, error } = await supa.from('ads').select('*').order('created_at', { ascending: false }).limit(200);
+      if (error) return res.status(500).json(errorEnvelope(error));
+      return res.status(200).json(successEnvelope(data || []));
+    }
+
     if (action === 'audit') {
       let request = supa.from('admin_logs').select('*').order('created_at', { ascending: false }).limit(Math.min(Number(q.limit) || 200, 500));
       if (q.target_type) request = request.eq('target_type', q.target_type);
@@ -222,6 +228,46 @@ export default createHandler(async function handler(req, res) {
       return res.status(200).json(successEnvelope(data || []));
     }
 
+
+    if (action === 'ad-create') {
+      const b = body(req);
+      const payload = {
+        title: String(b.title || '').trim(),
+        placement: b.placement || 'banner',
+        media_type: b.media_type || 'image',
+        media_path: b.media_path,
+        link_url: b.link_url || null,
+        starts_at: b.starts_at || new Date().toISOString(),
+        ends_at: b.ends_at || null,
+        is_active: b.is_active !== false,
+        priority: Number(b.priority || 0),
+        created_by: ctx.user.id,
+      };
+      const { data, error } = await supa.from('ads').insert(payload).select().single();
+      if (error) return res.status(400).json(errorEnvelope(error));
+      await logAdmin(supa, ctx, 'ad_create', 'ad', data.id, payload);
+      return res.status(201).json(successEnvelope(data));
+    }
+    if (action === 'ad-update') {
+      const b = body(req);
+      const id = b.id;
+      if (!id) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing id')));
+      const patch = { ...b, updated_at: new Date().toISOString() };
+      delete patch.id;
+      const { data, error } = await supa.from('ads').update(patch).eq('id', id).select().single();
+      if (error) return res.status(400).json(errorEnvelope(error));
+      await logAdmin(supa, ctx, 'ad_update', 'ad', id, patch);
+      return res.status(200).json(successEnvelope(data));
+    }
+    if (action === 'ad-delete') {
+      const b = body(req);
+      const id = b.id;
+      if (!id) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing id')));
+      const { error } = await supa.from('ads').delete().eq('id', id);
+      if (error) return res.status(400).json(errorEnvelope(error));
+      await logAdmin(supa, ctx, 'ad_delete', 'ad', id);
+      return res.status(200).json(successEnvelope({ id, deleted: true }));
+    }
     return res.status(200).json(successEnvelope({ service: 'admin', ok: true }));
   }
 
