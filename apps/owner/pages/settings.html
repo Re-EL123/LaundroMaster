@@ -71,14 +71,22 @@
         <form class="card" id="inviteForm">
           <div class="card-body">
             <h2 class="card-title">Add a team member</h2>
-            <p class="text-muted text-sm">They must already have a LaundroMaster account.</p>
+            <p class="text-muted text-sm">Create a staff account with login details.</p>
             <div class="field">
               <label class="label" for="inviteBiz">Laundromat</label>
               <select class="input" id="inviteBiz"></select>
             </div>
             <div class="field">
+              <label class="label" for="inviteName">Full name</label>
+              <input class="input" id="inviteName" placeholder="Staff name" required>
+            </div>
+            <div class="field">
               <label class="label" for="inviteEmail">Email</label>
               <input class="input" id="inviteEmail" type="email" placeholder="name@example.com" required>
+            </div>
+            <div class="field">
+              <label class="label" for="invitePassword">Password</label>
+              <input class="input" id="invitePassword" type="password" minlength="6" placeholder="Min 6 chars" required>
             </div>
             <div class="field">
               <label class="label" for="inviteRole">Role</label>
@@ -87,7 +95,7 @@
                 <option value="manager">Manager — full access</option>
               </select>
             </div>
-            <button class="btn btn-primary" type="submit" id="inviteBtn">Send invite</button>
+            <button class="btn btn-primary" type="submit" id="inviteBtn">Create staff account</button>
             <p class="form-msg" id="teamMsg" role="status" aria-live="polite"></p>
           </div>
         </form>

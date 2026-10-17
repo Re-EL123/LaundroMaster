@@ -246,7 +246,9 @@ import { uploadDocument } from '../../../shared/js/uploads.js';
       try {
         await api.post('/owner?action=staff-invite', {
           laundromat_id: document.getElementById('inviteBiz').value,
+          full_name: document.getElementById('inviteName').value.trim(),
           email: document.getElementById('inviteEmail').value.trim(),
+          password: document.getElementById('invitePassword').value,
           member_role: document.getElementById('inviteRole').value,
         });
         teamMsg.textContent = 'Team member added.';

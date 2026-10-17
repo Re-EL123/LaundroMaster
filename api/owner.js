@@ -499,15 +499,28 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
       if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can manage staff', 403)));
       const parsed = staffInvite.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
-      const { laundromat_id, email, member_role } = parsed.data;
+      const { laundromat_id, email, member_role, password, full_name, phone } = parsed.data;
       if (!ownedIds.includes(laundromat_id)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
-      const { data: profile } = await supa.from('profiles').select('id, full_name, email').ilike('email', email).maybeSingle();
-      if (!profile) return res.status(404).json(errorEnvelope(new ApiError('NOT_FOUND', 'No LaundroMaster account with that email. Ask them to sign up first.', 404)));
-      const { data: existing } = await supa.from('laundromat_members').select('id').eq('laundromat_id', laundromat_id).eq('user_id', profile.id).maybeSingle();
+      let profileId = null;
+      const { data: existingProfile } = await supa.from('profiles').select('id, full_name, email').ilike('email', email).maybeSingle();
+      if (existingProfile) {
+        profileId = existingProfile.id;
+      } else {
+        const { data: created, error: createErr } = await supa.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: { full_name, phone, role: 'staff' },
+        });
+        if (createErr || !created.user) return res.status(400).json(errorEnvelope(createErr || new ApiError('CREATE_FAILED', 'Could not create staff account')));
+        profileId = created.user.id;
+        await supa.from('profiles').update({ full_name: full_name || created.user.email, phone: phone || null }).eq('id', profileId);
+      }
+      const { data: existing } = await supa.from('laundromat_members').select('id').eq('laundromat_id', laundromat_id).eq('user_id', profileId).maybeSingle();
       if (existing) return res.status(409).json(errorEnvelope(new ApiError('ALREADY_MEMBER', 'This person is already on your team')));
-      const { data, error } = await supa.from('laundromat_members').insert({ laundromat_id, user_id: profile.id, member_role }).select('*, profiles!laundromat_members_user_id_fkey(id, full_name, email)').single();
+      const { data, error } = await supa.from('laundromat_members').insert({ laundromat_id, user_id: profileId, member_role }).select('*, profiles!laundromat_members_user_id_fkey(id, full_name, email)').single();
       if (error) return res.status(400).json(errorEnvelope(error));
-      await supa.from('user_roles').upsert({ user_id: profile.id, role: 'staff' }, { onConflict: 'user_id,role', ignoreDuplicates: true });
+      await supa.from('user_roles').upsert({ user_id: profileId, role: 'staff' }, { onConflict: 'user_id,role', ignoreDuplicates: true });
       return res.status(201).json(successEnvelope(data));
     }
 

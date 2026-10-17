@@ -219,7 +219,10 @@ export const documentUpload = z.object({
 
 export const staffInvite = z.object({
   laundromat_id: uuid,
+  full_name: z.string().min(2).optional(),
   email: z.string().email(),
+  phone: z.string().optional(),
+  password: z.string().min(6),
   member_role: z.enum(['manager', 'staff']).default('staff'),
 });
 
