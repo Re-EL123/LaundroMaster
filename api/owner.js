@@ -47,6 +47,27 @@ export default createHandler(async function handler(req, res) {
   if (!supa) return res.status(503).json(errorEnvelope(new ApiError('NOT_CONFIGURED', 'Supabase not configured', 503)));
 
   const ctx = await requireRoles(req, ['owner', 'staff', 'admin', 'super_admin']);
+
+
+async function isLaundromatSetupComplete(supa, laundromatId) {
+  const [{ data: l }, { data: svcs }, { data: hours }, { data: zones }] = await Promise.all([
+    supa.from('laundromats').select('name, address, phone, description, logo_path').eq('id', laundromatId).single(),
+    supa.from('services').select('id').eq('laundromat_id', laundromatId).eq('is_active', true).limit(1),
+    supa.from('operating_hours').select('id').eq('laundromat_id', laundromatId).limit(1),
+    supa.from('delivery_zones').select('id').eq('laundromat_id', laundromatId).limit(1),
+  ]);
+  if (!l) return false;
+  const checks = [
+    l.name && l.address && l.phone,
+    !!l.description,
+    !!l.logo_path,
+    (svcs && svcs.length > 0),
+    (hours && hours.length > 0),
+    (zones && zones.length > 0),
+  ];
+  return checks.every(Boolean);
+}
+
   const ids = await memberLaundromatIds(supa, ctx);
   const ownedIds = await ownerLaundromatIds(supa, ctx);
   const settings = await getSettings(supa);
@@ -333,6 +354,10 @@ export default createHandler(async function handler(req, res) {
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
       if (!ownedIds.includes(parsed.data.laundromat_id)) {
         return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
+      }
+      const complete = await isLaundromatSetupComplete(supa, parsed.data.laundromat_id);
+      if (!complete && ctx.role !== 'admin' && ctx.role !== 'super_admin') {
+        return res.status(400).json(errorEnvelope(new ApiError('SETUP_INCOMPLETE', 'Complete business profile, description, logo, operating hours, delivery zones before adding services.', 400)));
       }
       const { data, error } = await supa.from('services').insert(parsed.data).select().single();
       if (error) return res.status(400).json(errorEnvelope(error));
