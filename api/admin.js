@@ -238,6 +238,10 @@ export default createHandler(async function handler(req, res) {
       return res.status(200).json(successEnvelope(data || []));
     }
 
+    return res.status(200).json(successEnvelope({ service: 'admin', ok: true }));
+  }
+
+  if (req.method === 'POST') {
 
     if (action === 'ad-create') {
       const b = body(req);
@@ -278,10 +282,6 @@ export default createHandler(async function handler(req, res) {
       await logAdmin(supa, ctx, 'ad_delete', 'ad', id);
       return res.status(200).json(successEnvelope({ id, deleted: true }));
     }
-    return res.status(200).json(successEnvelope({ service: 'admin', ok: true }));
-  }
-
-  if (req.method === 'POST') {
     if (action === 'verify') {
       const parsed = verifyLaundromat.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
