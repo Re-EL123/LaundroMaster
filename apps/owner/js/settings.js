@@ -257,7 +257,7 @@ import { uploadDocument } from '../../../shared/js/uploads.js';
         toast('Team member added', 'success');
         loadTeam();
       } catch (err) {
-        teamMsg.textContent = err.message || 'Could not add team member.';
+        teamMsg.textContent = (err.error && err.error.message) || err.message || 'Could not add team member.';
         teamMsg.classList.add('is-error');
       } finally {
         btn.disabled = false;
