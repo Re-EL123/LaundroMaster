@@ -14,6 +14,7 @@ const NAV_ICONS = {
   payouts: 'banknote', payout: 'banknote',
   plan: 'layers', plans: 'layers', subscription: 'layers',
   promotions: 'tag', promotion: 'tag',
+  ads: 'megaphone', ad: 'megaphone',
   settings: 'settings', setting: 'settings',
   laundromats: 'store', laundromat: 'store', stores: 'store',
   verifications: 'badge-check', verification: 'badge-check',
