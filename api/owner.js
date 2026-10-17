@@ -251,6 +251,7 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
     }
 
     if (action === 'branding') {
+      if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can view branding', 403)));
       const { data, error } = await supa.from('laundromats')
         .select('id, name, description, address, phone, logo_path, photos, verification_status')
         .in('id', ids)

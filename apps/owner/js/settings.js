@@ -225,6 +225,7 @@ import { uploadDocument } from '../../../shared/js/uploads.js';
   }
 
   if (isOwner) {
+    document.getElementById('brandingSection').hidden = false;
     document.getElementById('teamSection').hidden = false;
     document.getElementById('availabilitySection').hidden = false;
     document.getElementById('operationsSection').hidden = false;
