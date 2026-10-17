@@ -59,7 +59,12 @@ async function startCheckout(supa, payment, urls, description) {
     raw_status: link.responseCode || null,
     updated_at: new Date().toISOString(),
   }).eq('id', payment.id).select().single();
-  return { payment: data || payment, checkout_url: link.paylinkUrl || null, paylink_id: link.paylinkID || null };
+  return {
+    payment: data || payment,
+    checkout_url: link.paylinkUrl || null,
+    checkout: link.checkout || null,
+    paylink_id: link.paylinkID || null,
+  };
 }
 
 export default createHandler(async function handler(req, res) {
@@ -201,8 +206,10 @@ export default createHandler(async function handler(req, res) {
       }
       if (!payment) return res.status(500).json(errorEnvelope(new ApiError('PAYMENT_ERROR', 'Could not start payment')));
 
-      if (payment.checkout_url && payment.status === 'pending') {
-        return res.status(200).json(successEnvelope({ payment, paid: false, checkout_url: payment.checkout_url, configured: true }));
+      if (payment.status === 'pending' && payment.checkout_url) {
+        const urls = bookingReturnUrls(req, booking_id, payment.id);
+        const restarted = await startCheckout(supa, payment, urls, `LaundroMaster order ${String(booking_id).slice(0, 8)}`);
+        return res.status(200).json(successEnvelope({ ...restarted, paid: false, configured: true }));
       }
 
       const urls = bookingReturnUrls(req, booking_id, payment.id);
@@ -265,8 +272,9 @@ export default createHandler(async function handler(req, res) {
       }
 
       let updated = payment;
-      if (payment.status !== 'succeeded' && payment.status !== 'failed' && payment.paylink_id) {
-        const statusData = await getPaymentStatus(payment.paylink_id);
+      if (payment.status !== 'succeeded' && payment.status !== 'failed') {
+        const gatewayRef = payment.paylink_id || payment.provider_reference || payment.id;
+        const statusData = gatewayRef ? await getPaymentStatus(gatewayRef) : null;
         const raw = statusData && (statusData.status || statusData.paymentStatus || statusData.responseCode);
         if (raw) updated = await reconcilePayment(supa, payment, raw) || payment;
       }

@@ -1,7 +1,7 @@
 import { activateSubscription } from './pricing.js';
 import { notifyUser } from './push.js';
 
-const SUCCESS_STATES = new Set(['success', 'succeeded', 'paid', 'complete', 'completed', '00', '_nonexist']);
+const SUCCESS_STATES = new Set(['success', 'successful', 'succeeded', 'paid', 'complete', 'completed', '00']);
 const FAILURE_STATES = new Set(['failure', 'failed', 'declined', 'error', 'cancelled', 'canceled']);
 const PENDING_STATES = new Set(['pending', 'created', 'processing', 'initiated']);
 

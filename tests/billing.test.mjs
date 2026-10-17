@@ -5,7 +5,7 @@ import { signPayload, payfastConfig, isConfigured } from '../api/_lib/payfast.js
 
 test('normalizeStatus maps PayFast outcomes to internal statuses', () => {
   assert.equal(normalizeStatus('SUCCESS'), 'succeeded');
-  assert.equal(normalizeStatus('successful'), null);
+  assert.equal(normalizeStatus('successful'), 'succeeded');
   assert.equal(normalizeStatus('succeeded'), 'succeeded');
   assert.equal(normalizeStatus('00'), 'succeeded');
   assert.equal(normalizeStatus('FAILURE'), 'failed');

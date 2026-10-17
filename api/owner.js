@@ -431,7 +431,13 @@ export default createHandler(async function handler(req, res) {
         raw_status: link.responseCode || null,
         updated_at: new Date().toISOString(),
       }).eq('id', payment.id);
-      return res.status(201).json(successEnvelope({ payment: { ...payment, checkout_url: link.paylinkUrl, paylink_id: link.paylinkID }, paid: false, checkout_url: link.paylinkUrl, configured: true }));
+      return res.status(201).json(successEnvelope({
+        payment: { ...payment, checkout_url: link.paylinkUrl, paylink_id: link.paylinkID },
+        paid: false,
+        checkout_url: link.paylinkUrl,
+        checkout: link.checkout || null,
+        configured: true,
+      }));
     }
 
     if (action === 'payout-request') {

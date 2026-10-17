@@ -2,6 +2,7 @@ import { api } from '../../../shared/js/api-client.js';
 import { skeleton, errorState, badge, toast, statusStepper, moneyBreakdown, confirmAction } from '../../../shared/js/ui.js';
 import { escapeHtml, currency, formatDate, relativeTime, statusLabel, statusTone, param } from '../../../shared/js/format.js';
 import { mountCustomerHeader, requireCustomer } from '../../../shared/js/chrome.js';
+import { beginPayfastCheckout } from '../../../shared/js/payfast-checkout.js';
 import { pageHref } from './components.js';
 
 mountCustomerHeader('');
@@ -54,8 +55,7 @@ async function payNow(bookingId, btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Starting secure payment…'; }
   try {
     const { data } = await api.post('/payments?action=create', { booking_id: bookingId });
-    if (data.checkout_url) {
-      window.location.href = data.checkout_url;
+    if ((data.checkout && beginPayfastCheckout(data.checkout)) || (data.checkout_url && beginPayfastCheckout(data.checkout_url))) {
       return;
     }
     toast('Payment confirmed', 'success');

@@ -17,6 +17,8 @@ import {
   adminUserUpdate,
   adminPayoutUpdate,
   adminNotification,
+  redeemPoints,
+  documentUpload,
 } from '../api/_lib/validation.js';
 
 const uuid = '11111111-1111-1111-1111-111111111111';
@@ -117,5 +119,20 @@ test('adminPayoutUpdate and adminNotification validate enums', () => {
   assert.equal(adminPayoutUpdate.safeParse({ payout_id: uuid, status: 'done' }).success, false);
   assert.equal(adminNotification.safeParse({ title: 'Hello' }).success, true);
   assert.equal(adminNotification.safeParse({ title: 'H' }).success, false);
+});
+
+test('redeemPoints requires integer >= 100', () => {
+  assert.equal(redeemPoints.safeParse({ points: 100 }).success, true);
+  assert.equal(redeemPoints.safeParse({ points: 250 }).success, true);
+  assert.equal(redeemPoints.safeParse({ points: 99 }).success, false);
+  assert.equal(redeemPoints.safeParse({ points: 100.5 }).success, false);
+  assert.equal(redeemPoints.safeParse({ points: -100 }).success, false);
+});
+
+test('documentUpload constrains doc type and storage path', () => {
+  assert.equal(documentUpload.safeParse({ laundromat_id: uuid, storage_path: 'laundromat/1.pdf' }).success, true);
+  assert.equal(documentUpload.safeParse({ laundromat_id: uuid, storage_path: 'laundromat/1.pdf', doc_type: 'identity' }).success, true);
+  assert.equal(documentUpload.safeParse({ laundromat_id: uuid, storage_path: 'laundromat/1.pdf', doc_type: 'ktp' }).success, false);
+  assert.equal(documentUpload.safeParse({ laundromat_id: uuid, storage_path: '' }).success, false);
 });
 

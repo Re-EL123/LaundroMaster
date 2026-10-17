@@ -1,7 +1,8 @@
 import { api } from '../../../shared/js/api-client.js';
 import { skeleton, emptyState, errorState, badge, toast, statTile } from '../../../shared/js/ui.js';
-import { escapeHtml, currency, formatDate, statusLabel, statusTone } from '../../../shared/js/format.js';
+import { escapeHtml, currency, formatDate, statusLabel, statusTone, param } from '../../../shared/js/format.js';
 import { mountDashboard } from '../../../shared/js/shell.js';
+import { beginPayfastCheckout } from '../../../shared/js/payfast-checkout.js';
 
 (async function () {
   const user = await mountDashboard({ allowed: ['owner', 'staff', 'admin', 'super_admin'] });
@@ -72,8 +73,7 @@ import { mountDashboard } from '../../../shared/js/shell.js';
     try {
       btn.textContent = 'Redirecting to payment...';
       const { data } = await api.post('/owner?action=promote', { laundromat_id: select.value, kind: 'featured' });
-      if (data && data.checkout_url) {
-        window.location.href = data.checkout_url;
+      if (data && ((data.checkout && beginPayfastCheckout(data.checkout)) || (data.checkout_url && beginPayfastCheckout(data.checkout_url)))) {
         return;
       }
       if (data && data.paid) {
@@ -94,5 +94,26 @@ import { mountDashboard } from '../../../shared/js/shell.js';
     }
   });
 
-  load();
+
+  async function reconcileReturn() {
+    const paymentId = param('payment');
+    const flag = param('promo');
+    if (!flag || !paymentId) return;
+    history.replaceState(null, '', location.pathname);
+    if (flag === 'canceled') { toast('Payment cancelled', 'info'); return; }
+    if (flag === 'failed') { toast('Payment failed — you can try again', 'danger'); return; }
+    if (flag === 'paid') {
+      try {
+        const { data } = await api.post('/payments?action=verify', { payment_id: paymentId });
+        if (data.payment && data.payment.status === 'succeeded') toast('Promotion payment received', 'success');
+        else toast('Confirming promotion payment...', 'info');
+      } catch (err) {
+        toast(err.message || 'Could not confirm payment', 'danger');
+      } finally {
+        load();
+      }
+    }
+  }
+
+  load().then(reconcileReturn);
 })();

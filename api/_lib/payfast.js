@@ -1,10 +1,7 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 
 // PayFast Integration (hosted payment)
 // Docs: https://developers.payfast.co.za/docs
-// Generate signature: MD5 of parameter string (or custom per PayFast docs).
-
-const PAYMENT_PATH = '/public-api/v1/api/payment';
 
 export function payfastConfig() {
   const merchantId = (process.env.PAYFAST_MERCHANT_ID || process.env.PAYFAST_APP_ID || '').trim();
@@ -20,7 +17,6 @@ export function isConfigured() {
   return Boolean(merchantId && merchantKey);
 }
 
-import { createHash } from 'node:crypto';
 export function signPayload(params, passphrase = null) {
   const data = { ...(params || {}) };
   const pass = passphrase !== null && passphrase !== undefined ? String(passphrase).trim() : '';
@@ -37,35 +33,47 @@ export function signPayload(params, passphrase = null) {
   return createHash('md5').update(str).digest('hex');
 }
 
-function toCents(amount) {
-  return Math.round(Number(amount || 0) * 100);
+function payfastProcessBase(cfg) {
+  return cfg.mode === 'live' ? cfg.baseUrl : 'https://sandbox.payfast.co.za';
 }
 
-
-export async function validatePayment({ m_payment_id, payment_id, amount_gross } = {}) {
+/** PayFast ITN server confirmation — POST the received fields back to PayFast. */
+export async function confirmItnWithPayfast(params) {
   const cfg = payfastConfig();
-  if (!isConfigured() || !m_payment_id) return { valid: false };
-  const params = {
-    merchant_id: cfg.merchantId,
-    merchant_key: cfg.merchantKey,
-    m_payment_id,
-  };
-  const sig = signPayload(params, cfg.passphrase);
-  const query = Object.keys(params).filter(k => params[k]).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join('&') + `&signature=${encodeURIComponent(sig)}`;
-  const base = cfg.mode === 'live' ? cfg.baseUrl : 'https://sandbox.payfast.co.za';
-  const url = `${base}/eng/query/validate?${query}`;
+  if (!isConfigured() || !params || typeof params !== 'object') return false;
+
+  const body = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (key === 'signature' || value == null || String(value).trim() === '') continue;
+    body.append(key, String(value).trim());
+  }
+  if (!body.toString()) return false;
+
+  const url = `${payfastProcessBase(cfg)}/eng/query/validate`;
   try {
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!res.ok) return { valid: false };
-    const data = await res.json();
-    if (data && data.code === '000') return { valid: true, data };
-  } catch {}
-  return { valid: false };
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
+    if (!res.ok) return false;
+    const text = (await res.text()).trim();
+    return text === 'VALID';
+  } catch {
+    return false;
+  }
 }
 
-// Create a hosted PayFast payment. Returns minimal shape compatible with existing callers.
-// PayFast expects a form POST to /eng/process; here we return a checkout_url that the
-// client can redirect to, containing signed parameters.
+/** Validate an ITN payload (full PayFast notification body). */
+export async function validatePayment(itnParams = {}) {
+  if (!itnParams || typeof itnParams !== 'object') return { valid: false };
+  const valid = await confirmItnWithPayfast(itnParams);
+  if (!valid) return { valid: false };
+  const status = itnParams.payment_status || itnParams.PAYMENT_STATUS || 'COMPLETE';
+  return { valid: true, data: { payment_status: status, ...itnParams } };
+}
+
+// Create a hosted PayFast payment. Returns a POST form payload for the browser.
 export async function createPaymentLink({
   amount,
   currency = 'ZAR',
@@ -102,51 +110,57 @@ export async function createPaymentLink({
     custom_str1: reference,
   };
 
-  const pfBase = cfg.mode === 'live' ? cfg.baseUrl : 'https://sandbox.payfast.co.za';
-  let query = Object.keys(params).filter(k => params[k] !== undefined && params[k] !== null && params[k] !== '').map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join('&');
-  const sig = signPayload(params, cfg.passphrase);
-  if (query) query += `&signature=${encodeURIComponent(sig)}`;
+  const pfBase = payfastProcessBase(cfg);
+  const action = `${pfBase}/eng/process`;
+  const signature = signPayload(params, cfg.passphrase);
+  const fields = { ...params, signature };
 
   return {
-    paylinkUrl: `${pfBase}/eng/process?${query}`,
+    paylinkUrl: action,
     paylinkID: reference,
     externalTransactionID: reference,
     responseCode: '00',
     message: 'OK',
+    checkout: { action, fields },
   };
 }
 
-// Look up payment status via validate endpoint if possible.
-export async function getPaymentStatus(paylinkId) {
+// Best-effort status lookup when the client returns before the ITN webhook lands.
+export async function getPaymentStatus(paylinkId, itnParams = null) {
+  if (itnParams && typeof itnParams === 'object') {
+    const res = await validatePayment(itnParams);
+    if (res.valid) {
+      const status = res.data.payment_status || res.data.status || 'COMPLETE';
+      return { status, data: res.data };
+    }
+    return null;
+  }
   if (!paylinkId) return null;
   const res = await validatePayment({ m_payment_id: paylinkId });
-  if (res && res.valid && res.data) {
-    return { status: res.data.status || res.data.payment_status || null, data: res.data };
+  if (res.valid) {
+    const status = res.data.payment_status || res.data.status || 'COMPLETE';
+    return { status, data: res.data };
   }
   return null;
 }
 
-// Verify PayFast ITN signature (server-to-server). PayFast posts all fields; signature
-// is the MD5 of the concatenated sorted key=value pairs, excluding the signature field itself.
 export function verifyWebhookSignature({ body = {}, signature, headers = {} } = {}) {
   const sig = signature || body.signature || body.SIGNATURE || headers['x-payfast-signature'] || headers['X-PayFast-Signature'] || headers.signature;
   if (!sig || typeof body !== 'object') return false;
   const params = { ...body };
   const cfg = payfastConfig();
-  const expected1 = signPayload(params, cfg.passphrase);
-  const expected2 = signPayload(params, cfg.passphrase ? cfg.passphrase : undefined);
-  const candidates = [expected1, expected2];
-  // also try without passphrase
-  candidates.push(signPayload(params));
+  const candidates = [
+    signPayload(params, cfg.passphrase),
+    signPayload(params),
+  ];
   const b = Buffer.from(String(sig));
   for (const c of candidates) {
     const a = Buffer.from(c);
     if (a.length === b.length) {
       try {
         if (timingSafeEqual(a, b)) return true;
-      } catch {}
+      } catch { /* length mismatch */ }
     }
   }
-  // try case-insensitive? maybe
   return false;
 }

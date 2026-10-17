@@ -2,6 +2,7 @@ import { api } from '../../../shared/js/api-client.js';
 import { skeleton, emptyState, errorState, badge, toast } from '../../../shared/js/ui.js';
 import { escapeHtml, currency } from '../../../shared/js/format.js';
 import { mountDashboard } from '../../../shared/js/shell.js';
+import { beginPayfastCheckout } from '../../../shared/js/payfast-checkout.js';
 
 (async function () {
   const user = await mountDashboard({ allowed: ['owner', 'staff', 'admin', 'super_admin'] });
@@ -75,7 +76,7 @@ import { mountDashboard } from '../../../shared/js/shell.js';
       sub.disabled = true;
       try {
         const { data } = await api.post('/payments?action=subscribe', { plan_id: sub.dataset.subscribe });
-        if (data.checkout_url) { window.location.href = data.checkout_url; return; }
+        if ((data.checkout && beginPayfastCheckout(data.checkout)) || (data.checkout_url && beginPayfastCheckout(data.checkout_url))) return;
         toast(data.subscription ? 'Plan activated' : 'Plan updated', 'success');
         load();
       } catch (err) {

@@ -2,6 +2,7 @@ import { api } from '../../../shared/js/api-client.js';
 import { toast, badge } from '../../../shared/js/ui.js';
 import { statusLabel, currency, escapeHtml, formatDateOnly } from '../../../shared/js/format.js';
 import { mountCustomerHeader, requireCustomer } from '../../../shared/js/chrome.js';
+import { beginPayfastCheckout } from '../../../shared/js/payfast-checkout.js';
 import { logout, portalUrl } from '../../../shared/js/auth-client.js';
 import { publicUrl } from '../../../shared/js/uploads.js';
 
@@ -147,7 +148,7 @@ plusCard.addEventListener('click', async (e) => {
     join.disabled = true;
     try {
       const { data } = await api.post('/payments?action=subscribe', { plan_id: join.dataset.plan });
-      if (data.checkout_url) { window.location.href = data.checkout_url; return; }
+      if ((data.checkout && beginPayfastCheckout(data.checkout)) || (data.checkout_url && beginPayfastCheckout(data.checkout_url))) return;
       toast(data.subscription ? 'Membership active' : 'Welcome to LaundroMaster+', 'success');
       loadPlus();
       loadSavings();

@@ -9,13 +9,12 @@ Vercel project and env vars.
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-# iKhokha (Integrations → Payment API)
-IKHOKHA_APP_ID=
-IKHOKHA_APP_SECRET=
-IKHOKHA_ENTITY_ID=
-IKHOKHA_MODE=test            # test | live
-IKHOKHA_BASE_URL=https://api.ikhokha.com
-IKHOKHA_WEBHOOK_SECRET=      # defaults to IKHOKHA_APP_SECRET
+# PayFast (Settings → Developer settings)
+PAYFAST_MERCHANT_ID=
+PAYFAST_MERCHANT_KEY=
+PAYFAST_PASSPHRASE=          # optional; used for signed ITN + checkout
+PAYFAST_MODE=test            # test | live
+PAYFAST_BASE_URL=https://www.payfast.co.za
 EMAIL_PROVIDER_API_KEY=
 APP_BASE_URL=https://laundromaster.re-el.co.za
 PUBLIC_APP_URL=https://laundromaster.re-el.co.za
