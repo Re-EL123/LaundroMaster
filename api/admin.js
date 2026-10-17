@@ -212,6 +212,16 @@ export default createHandler(async function handler(req, res) {
       return res.status(200).json(successEnvelope(data || []));
     }
 
+
+    if (action === 'analytics-lite' || action === 'analytics') {
+      const { data: bookings } = await supa.from('bookings').select('status, total_amount, created_at').limit(1000);
+      const rows = bookings || [];
+      const byStatus = rows.reduce((acc, b) => { acc[b.status] = (acc[b.status] || 0) + 1; return acc; }, {});
+      const revenue = rows.filter((b) => b.status === 'completed').reduce((s, b) => s + (Number(b.total_amount) || 0), 0);
+      const recent = rows.slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,10);
+      return res.status(200).json(successEnvelope({ scope: 'admin', byStatus, revenue, count: rows.length, recent }));
+    }
+
     if (action === 'ads') {
       const { data, error } = await supa.from('ads').select('*').order('created_at', { ascending: false }).limit(200);
       if (error) return res.status(500).json(errorEnvelope(error));
