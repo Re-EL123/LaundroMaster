@@ -33,7 +33,7 @@ function extension(name = '') {
 
 function docExtension(name = '') {
   const ext = (name.split('.').pop() || '').toLowerCase();
-  return /^(pdf|doc|docx|png|jpe?g|webp|gif|avif|heic|heif)$/.test(ext) ? ext.replace(/^jpeg$/, 'jpg') : 'pdf';
+  return /^(pdf|doc|docx|png|jpe?g|webp|gif|avif|heic|heif|mp4|webm|mov)$/.test(ext) ? ext.replace(/^jpeg$/, 'jpg') : 'pdf';
 }
 
 // Uploads a non-image verification/business document and returns its storage path.
@@ -41,7 +41,7 @@ export async function uploadDocument(file, { bucket = 'verification-documents', 
   if (!file) throw new Error('No file selected');
   if (file.size > MAX_BYTES) throw new Error('Document must be under 8MB');
 
-  const allowed = /^(application\/pdf|text\/plain|image\/(png|jpe?g|webp|gif|avif|heic)|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document)$/i;
+  const allowed = /^(application\/pdf|text\/plain|image\/(png|jpe?g|webp|gif|avif|heic)|video\/(mp4|webm|quicktime)|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document)$/i;
   if (!allowed.test(file.type || '')) throw new Error('Please choose a PDF, image or Word document');
 
   const cleanPrefix = prefix ? `${prefix.replace(/^\/|\/$/g, '')}/` : '';

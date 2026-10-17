@@ -1,5 +1,5 @@
 import { api } from './api-client.js';
-import { publicUrl } from './format.js';
+import { publicUrl } from './uploads.js';
 
 export async function renderAds() {
   try {

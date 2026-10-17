@@ -55,8 +55,13 @@
           <form id="adForm" class="form-grid">
             <div class="field"><label class="label">Title</label><input class="input" name="title" required></div>
             <div class="field"><label class="label">Placement</label><select class="select" name="placement"><option value="hero">Hero</option><option value="banner">Banner</option><option value="popup">Popup</option></select></div>
-            <div class="field"><label class="label">Media type</label><select class="select" name="media_type"><option value="image">Image</option><option value="video">Video</option></select></div>
-            <div class="field"><label class="label">Media path</label><input class="input" name="media_path" placeholder="bucket/path or upload path" required></div>
+            <div class="field"><label class="label">Media type</label><select class="select" name="media_type" id="mediaType"><option value="image">Image</option><option value="video">Video</option></select></div>
+            <div class="field" style="grid-column:1/-1"><label class="label">Media</label>
+              <input type="file" id="mediaFile" accept="image/*,video/*" hidden>
+              <button type="button" class="btn btn-secondary" id="mediaUploadBtn">Upload media</button>
+              <input type="hidden" name="media_path" id="mediaPath" required>
+              <div id="mediaPreview" style="margin-top:8px"></div>
+            </div>
             <div class="field"><label class="label">Link URL</label><input class="input" name="link_url"></div>
             <div class="field"><label class="label">Priority</label><input class="input" name="priority" type="number" value="0"></div>
             <button class="btn btn-primary" type="submit">Save</button>
