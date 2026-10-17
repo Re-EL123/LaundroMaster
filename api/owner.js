@@ -227,6 +227,7 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
     }
 
     if (action === 'earnings') {
+      if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can view earnings', 403)));
       const balance = await ownerBalance(supa, ctx.user.id);
       if (!ids.length) return res.status(200).json(successEnvelope({ total: 0, ...balance, transactions: [] }));
       const { data, error } = await supa.from('transactions').select('*').in('laundromat_id', ids).order('created_at', { ascending: false }).limit(100);
@@ -280,6 +281,7 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
     }
 
     if (action === 'payouts') {
+      if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can view payouts', 403)));
       const balance = await ownerBalance(supa, ctx.user.id);
       const { data, error } = await supa.from('payouts').select('*').eq('owner_id', ctx.user.id).order('created_at', { ascending: false });
       if (error) return res.status(500).json(errorEnvelope(error));
@@ -400,6 +402,7 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
     }
 
     if (action === 'promote') {
+      if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can perform this action', 403)));
       const parsed = promotionCreate.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
       const { laundromat_id, kind } = parsed.data;
@@ -476,6 +479,7 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
     }
 
     if (action === 'payout-request') {
+      if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can perform this action', 403)));
       const parsed = payoutRequest.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
       const balance = await ownerBalance(supa, ctx.user.id);
