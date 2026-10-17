@@ -870,9 +870,9 @@ create table if not exists ads (
 
 alter table ads enable row level security;
 
-create policy if not exists "ads_public_read" on ads for select using (is_active and (ends_at is null or ends_at > now()) and (starts_at <= now()));
+do $$ begin create policy "ads_public_read" on ads for select using (is_active and (ends_at is null or ends_at > now()) and (starts_at <= now())); exception when others then null; end $$;
 
-create policy if not exists "ads_admin_write" on ads for all using (auth.role() = 'service_role');
+do $$ begin create policy "ads_admin_write" on ads for all using (auth.role() = 'service_role'); exception when others then null; end $$;
 
 create index if not exists ads_active_idx on ads (placement, is_active, starts_at, ends_at, priority desc);
 
