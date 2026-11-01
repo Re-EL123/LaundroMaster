@@ -41,7 +41,11 @@ export function currentPosition({ enableHighAccuracy = false, timeout = 9000, ma
           : err && err.code === 3
             ? 'Finding your location took too long.'
             : 'Could not determine your location.';
-        reject(new Error(message));
+        // Keep the PositionError code so callers can tell a permanent denial
+        // apart from a fix that simply was not available this time.
+        const failure = new Error(message);
+        if (err && err.code != null) failure.code = err.code;
+        reject(failure);
       },
       { enableHighAccuracy, timeout, maximumAge },
     );
@@ -69,6 +73,24 @@ export async function currentPositionIfPermitted(options = {}) {
  */
 export function precisePosition({ timeout = 25000 } = {}) {
   return currentPosition({ enableHighAccuracy: true, timeout, maximumAge: 0 });
+}
+
+/**
+ * Ask for a GPS-grade fix, but never leave the caller with nothing: if the
+ * high-accuracy attempt fails or times out — normal on a laptop, which has no
+ * GPS — take the browser's fastest fresh reading instead. `maximumAge: 0` on
+ * the fallback keeps a cached position from being mistaken for the current one.
+ * Callers can read `pos.accuracy` to see how precise the result really is.
+ */
+export async function bestEffortPosition(options = {}) {
+  try {
+    return await precisePosition(options);
+  } catch (err) {
+    // A denied permission is sticky: retrying can only fail again, so keep the
+    // caller's own "permission denied" handling intact.
+    if (err && err.code === 1) throw err;
+    return currentPosition({ maximumAge: 0 });
+  }
 }
 
 export function distanceKm(a, b) {

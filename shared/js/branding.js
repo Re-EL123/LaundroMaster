@@ -1,6 +1,6 @@
 import { uploadImage, publicUrl } from './uploads.js';
 import { escapeHtml } from './format.js';
-import { precisePosition } from './geolocation.js';
+import { bestEffortPosition } from './geolocation.js';
 import { attachPlaceAutocomplete } from './places.js';
 
 // Renders per-laundromat branding controls (logo + gallery + details) into `host`.
@@ -156,7 +156,7 @@ function wireLocation(card) {
     locateBtn.disabled = true;
     msg.textContent = 'Getting a precise GPS fix — this can take a few seconds…';
     try {
-      const pos = await precisePosition();
+      const pos = await bestEffortPosition();
       const accuracy = Number(pos.accuracy);
       const coarse = !Number.isFinite(accuracy) || accuracy > MAX_ACCURACY_M;
 

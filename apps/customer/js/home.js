@@ -5,7 +5,7 @@ import { laundromatCard } from './components.js';
 import { renderAds } from '../../../shared/js/ads.js';
 import { escapeHtml } from '../../../shared/js/format.js';
 import {
-  precisePosition, currentPositionIfPermitted, permissionState, supported,
+  bestEffortPosition, currentPositionIfPermitted, permissionState, supported,
 } from '../../../shared/js/geolocation.js';
 
 mountCustomerHeader('');
@@ -152,7 +152,7 @@ async function savedAddressQuery() {
 
 async function locate({ interactive = false } = {}) {
   try {
-    const pos = await precisePosition();
+    const pos = await bestEffortPosition();
     await searchNear({ lat: pos.lat, lng: pos.lng });
     return true;
   } catch (err) {
