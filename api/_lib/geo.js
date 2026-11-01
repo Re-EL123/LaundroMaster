@@ -8,6 +8,19 @@ const NOMINATIM_REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse';
 const DEFAULT_TIMEOUT_MS = 4500;
 const USER_AGENT = 'LaundroMaster/1.0 (+https://laundromaster.re-el.co.za)';
 
+// The platform only serves South Africa (Nominatim is already restricted to it
+// via countrycodes=za). Photon has no country parameter, so without a bounding
+// box "12 Main Rd Sandton" happily resolves to Dunedin, New Zealand. Order is
+// minLon, minLat, maxLon, maxLat.
+const ZA_BBOX = '16.45,-34.85,32.90,-22.10';
+const [ZA_MIN_LNG, ZA_MIN_LAT, ZA_MAX_LNG, ZA_MAX_LAT] = ZA_BBOX.split(',').map(Number);
+
+function inSouthAfrica(lng, lat) {
+  return Number.isFinite(lng) && Number.isFinite(lat)
+    && lng >= ZA_MIN_LNG && lng <= ZA_MAX_LNG
+    && lat >= ZA_MIN_LAT && lat <= ZA_MAX_LAT;
+}
+
 export function toRad(deg) {
   return (deg * Math.PI) / 180;
 }
@@ -157,10 +170,20 @@ export async function geocodeCandidates(queryText, { limit = 6, timeoutMs = DEFA
   if (q.length < 3) return [];
   const capped = Math.max(1, Math.min(Number(limit) || 6, 10));
 
-  const photonUrl = `${PHOTON_URL}?q=${encodeURIComponent(q)}&limit=${capped}&lang=en`;
+  const photonUrl = `${PHOTON_URL}?q=${encodeURIComponent(q)}&limit=${capped}&lang=en&bbox=${ZA_BBOX}`;
   const photon = await fetchJson(photonUrl, { timeoutMs });
   const features = photon && Array.isArray(photon.features) ? photon.features : [];
-  const fromPhoton = features.map(photonPlace).filter(Boolean);
+  const fromPhoton = features
+    // A bbox only biases Photon's ranking, so verify each hit really is in
+    // South Africa — otherwise Lesotho (an enclave inside the box) leaks in.
+    .filter((feature) => {
+      const p = (feature && feature.properties) || {};
+      if (p.countrycode) return String(p.countrycode).toUpperCase() === 'ZA';
+      const coords = feature && feature.geometry && feature.geometry.coordinates;
+      return Boolean(coords) && inSouthAfrica(Number(coords[0]), Number(coords[1]));
+    })
+    .map(photonPlace)
+    .filter(Boolean);
   if (fromPhoton.length) return fromPhoton;
 
   const parts = [`q=${encodeURIComponent(q)}`];

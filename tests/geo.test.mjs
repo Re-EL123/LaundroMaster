@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   haversineKm, validLatLng, rankByDistance, addressQuery, addressScore, pickBestPlace,
+  geocodeCandidates,
 } from '../api/_lib/geo.js';
 
 const JOBURG = { lat: -26.2041, lng: 28.0473 };
@@ -108,4 +109,66 @@ test('pickBestPlace chooses the most precise candidate', () => {
   assert.equal(pickBestPlace([suburb], '12 Main Rd Sandton'), suburb);
   assert.equal(pickBestPlace([], 'x'), null);
   assert.equal(pickBestPlace(null, 'x'), null);
+});
+
+// Photon has no country parameter, so without a bounding box an address search
+// returns whichever "Main Rd" is most popular — often in New Zealand.
+function stubFetch(photonFeatures, nominatimHits = []) {
+  const calls = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const href = String(url);
+    calls.push(href);
+    const body = href.includes('photon.komoot.io') ? { features: photonFeatures } : nominatimHits;
+    return { ok: true, json: async () => body };
+  };
+  return { calls, restore: () => { globalThis.fetch = original; } };
+}
+
+test('geocodeCandidates drops Photon hits outside South Africa and falls back to Nominatim', async () => {
+  const stub = stubFetch([
+    {
+      properties: { name: 'Main Rd Fairfield, 12', street: 'Main Road', country: 'New Zealand', countrycode: 'NZ' },
+      geometry: { coordinates: [170.4022, -45.8971] },
+    },
+    {
+      // Lesotho sits inside the South African bounding box.
+      properties: { name: 'Katlehong', country: 'Lesotho', countrycode: 'LS' },
+      geometry: { coordinates: [27.4885, -29.3296] },
+    },
+  ], [{
+    lat: '-26.1075',
+    lon: '28.0567',
+    display_name: '12 Main Rd, Sandton, Johannesburg, South Africa',
+    address: { house_number: '12', road: 'Main Rd', suburb: 'Sandton', city: 'Johannesburg' },
+  }]);
+  try {
+    const places = await geocodeCandidates('12 Main Rd Sandton', { limit: 3 });
+    assert.equal(stub.calls.length, 2, 'foreign hits must not satisfy the query');
+    assert.ok(stub.calls[0].includes('bbox='), 'Photon must be asked to prefer South Africa');
+    assert.equal(places.length, 1);
+    assert.equal(places[0].provider, 'nominatim');
+    assert.ok(places[0].label.includes('South Africa'));
+  } finally {
+    stub.restore();
+  }
+});
+
+test('geocodeCandidates keeps South African Photon hits without calling Nominatim', async () => {
+  const stub = stubFetch([{
+    properties: {
+      name: 'Main Road', street: 'Main Road', locality: 'Melville', city: 'Johannesburg',
+      state: 'Gauteng', country: 'South Africa', countrycode: 'ZA', postcode: '2092',
+    },
+    geometry: { coordinates: [28.0009, -26.1764] },
+  }]);
+  try {
+    const places = await geocodeCandidates('Main Road Johannesburg', { limit: 3 });
+    assert.equal(stub.calls.length, 1);
+    assert.equal(places.length, 1);
+    assert.equal(places[0].provider, 'photon');
+    assert.equal(places[0].city, 'Johannesburg');
+  } finally {
+    stub.restore();
+  }
 });
