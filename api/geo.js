@@ -118,7 +118,19 @@ export default createHandler(async function handler(req, res) {
       if (updateError) failed += 1;
       else updated += 1;
     }
-    return res.status(200).json(successEnvelope({ checked: targets.length, updated, failed }));
+    // Approved listings with neither a pin nor an address can never be fixed by
+    // this tool. They are excluded from the query above, so report them instead
+    // of letting "0 mapped" read as "nothing left to do".
+    const { data: addressless } = await supa
+      .from('laundromats')
+      .select('id, address, latitude, longitude')
+      .eq('verification_status', 'approved')
+      .or('latitude.is.null,longitude.is.null')
+      .limit(200);
+    const unpinnable = (addressless || []).filter(
+      (row) => !validLatLng(row.latitude, row.longitude) && !String(row.address || '').trim(),
+    ).length;
+    return res.status(200).json(successEnvelope({ checked: targets.length, updated, failed, unpinnable }));
   }
 
   if (action !== 'search') {

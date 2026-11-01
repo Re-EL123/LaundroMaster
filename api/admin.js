@@ -304,7 +304,8 @@ export default createHandler(async function handler(req, res) {
       const { data, error } = await supa.from('laundromats').update({ verification_status: status }).eq('id', laundromat_id).select().single();
       if (error) return res.status(400).json(errorEnvelope(error));
       // Approving a listing without coordinates would hide it from "near me".
-      if (status === 'approved' && data && !validLatLng(data.latitude, data.longitude) && data.address) {
+      const approved = status === 'approved';
+      if (approved && data && !validLatLng(data.latitude, data.longitude) && data.address) {
         const loc = await geocode(data.address, { timeoutMs: 3500 });
         if (loc) {
           await supa.from('laundromats')
@@ -314,10 +315,15 @@ export default createHandler(async function handler(req, res) {
           data.longitude = loc.lng;
         }
       }
+      // An approved listing with no usable pin (nothing to geocode) is live but
+      // unreachable in "Near me": report that rather than claiming it is visible.
+      const approvedWithoutPin = approved && data && !validLatLng(data.latitude, data.longitude);
       await logAdmin(supa, ctx, `verification.${status}`, 'laundromat', laundromat_id, { reason: reason || null });
       if (data && data.owner_id) {
         const messages = {
-          approved: ['Your business is live', 'Your laundromat has been approved and is now visible to customers.'],
+          approved: approvedWithoutPin
+            ? ['Your business is approved', 'Your listing is approved, but it has no map pin yet. Add an address or drop a pin so customers can find it in "Near me".']
+            : ['Your business is live', 'Your laundromat has been approved and is now visible to customers.'],
           rejected: ['Verification needs attention', `Your listing was not approved. ${reason ? `Reason: ${reason}` : 'Please review your details and resubmit.'}`],
           suspended: ['Listing suspended', 'Your listing has been suspended. Contact support for details.'],
           pending: ['Verification in progress', 'Your listing is back under review.'],
@@ -325,7 +331,7 @@ export default createHandler(async function handler(req, res) {
         const [title, body] = messages[status] || ['Listing updated', 'Your listing status changed.'];
         await notifyUser(supa, data.owner_id, { type: `verification_${status}`, title, body, url: 'apps/owner/index.html' });
       }
-      return res.status(200).json(successEnvelope(data));
+      return res.status(200).json(successEnvelope(data, approvedWithoutPin ? { warning: 'APPROVED_WITHOUT_PIN' } : {}));
     }
 
     if (action === 'settings-update') {

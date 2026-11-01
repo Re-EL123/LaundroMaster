@@ -24,11 +24,18 @@ import { mountDashboard } from '../../../shared/js/shell.js';
 
   function render(l) {
     const owner = l.profiles ? escapeHtml(l.profiles.full_name || l.profiles.email || '') : '';
+    // An approved listing without a pin never appears in customer "Near me"
+    // searches, so flag it here instead of letting it look live and reachable.
+    const unpinned = l.verification_status === 'approved' && (l.latitude == null || l.longitude == null);
     return `<article class="card" data-id="${l.id}">
       <div class="card-body">
         ${badge(statusLabel(l.verification_status), statusTone(l.verification_status))}
+        ${unpinned ? badge(l.address ? 'No map pin' : 'No address', 'warning') : ''}
         <h3 class="card-title">${escapeHtml(l.name)}</h3>
         <p class="card-meta">${escapeHtml(l.address || 'No address')}</p>
+        ${unpinned ? `<p class="text-xs text-muted">${l.address
+          ? 'Hidden from “Near me” until it has coordinates.'
+          : 'Invisible in “Near me” — it has no address to map.'}</p>` : ''}
         ${owner ? `<p class="text-xs text-muted">Owner: ${owner}</p>` : ''}
         <p class="text-xs text-muted">Created ${formatDate(l.created_at)}</p>
         <div class="flex wrap">
@@ -99,8 +106,11 @@ import { mountDashboard } from '../../../shared/js/shell.js';
   }
 
   async function decide(id, status, reason) {
-    await api.post('/admin?action=verify', { laundromat_id: id, status, reason });
+    const envelope = await api.post('/admin?action=verify', { laundromat_id: id, status, reason });
     toast('Laundromat updated', 'success');
+    if (envelope.meta && envelope.meta.warning === 'APPROVED_WITHOUT_PIN') {
+      toast('Approved, but it has no map pin — customers will not find it in “Near me”.', 'warning');
+    }
     if (detail) detail.innerHTML = '';
     load();
   }
@@ -162,7 +172,10 @@ import { mountDashboard } from '../../../shared/js/shell.js';
       geocodeBtn.textContent = 'Looking up addresses…';
       try {
         const { data } = await api.post('/geo?action=backfill', { limit: 200 });
-        toast(`${data.updated} listing(s) mapped${data.failed ? `, ${data.failed} could not be found` : ''}`, data.failed ? 'info' : 'success');
+        const parts = [`${data.updated} listing(s) mapped`];
+        if (data.failed) parts.push(`${data.failed} could not be found`);
+        if (data.unpinnable) parts.push(`${data.unpinnable} approved listing(s) have no address and cannot be mapped`);
+        toast(parts.join(', '), data.unpinnable ? 'warning' : (data.failed ? 'info' : 'success'));
         load();
       } catch (err) {
         toast(err.message || 'Could not backfill coordinates', 'danger');
