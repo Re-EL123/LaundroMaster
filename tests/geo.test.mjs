@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  haversineKm, validLatLng, rankByDistance, addressQuery,
+  haversineKm, validLatLng, rankByDistance, addressQuery, addressScore, pickBestPlace,
 } from '../api/_lib/geo.js';
 
 const JOBURG = { lat: -26.2041, lng: 28.0473 };
@@ -81,4 +81,31 @@ test('addressQuery joins structured fields and passes strings through', () => {
     '12 Main Rd, Unit 3, Sandton, Johannesburg, 2196',
   );
   assert.equal(addressQuery({ city: 'Durban' }), 'Durban');
+});
+
+test('addressScore ranks a street address above a suburb centroid', () => {
+  const suburb = { label: 'Sandton, Johannesburg, South Africa', city: 'Johannesburg', has_address: false };
+  const address = {
+    label: '12 Main Rd, Sandton, Johannesburg, South Africa',
+    housenumber: '12',
+    street: 'Main Rd',
+    city: 'Johannesburg',
+    has_address: true,
+  };
+  assert.ok(addressScore(address, '12 Main Rd Sandton') > addressScore(suburb, '12 Main Rd Sandton'));
+  assert.equal(addressScore(null, 'anything'), -1);
+});
+
+test('pickBestPlace chooses the most precise candidate', () => {
+  const suburb = { label: 'Sandton, Johannesburg', city: 'Johannesburg' };
+  const address = {
+    label: '12 Main Rd, Sandton, Johannesburg',
+    housenumber: '12',
+    street: 'Main Rd',
+    has_address: true,
+  };
+  assert.equal(pickBestPlace([suburb, address], '12 Main Rd Sandton'), address);
+  assert.equal(pickBestPlace([suburb], '12 Main Rd Sandton'), suburb);
+  assert.equal(pickBestPlace([], 'x'), null);
+  assert.equal(pickBestPlace(null, 'x'), null);
 });

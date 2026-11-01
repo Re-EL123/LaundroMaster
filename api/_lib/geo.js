@@ -63,46 +63,119 @@ function labelFromProperties(p = {}) {
   return [...new Set(parts.map(clean).filter(Boolean))].join(', ');
 }
 
-function nicknameFromProperties(p = {}) {
-  return clean(p.name || p.street || p.city) || null;
+function photonPlace(feature) {
+  const p = (feature && feature.properties) || {};
+  const coords = feature && feature.geometry && feature.geometry.coordinates;
+  const lat = Number(coords && coords[1]);
+  const lng = Number(coords && coords[0]);
+  if (!validLatLng(lat, lng)) return null;
+  const housenumber = clean(p.housenumber) || null;
+  const street = clean(p.street) || null;
+  return {
+    lat,
+    lng,
+    name: clean(p.name) || null,
+    housenumber,
+    street,
+    suburb: clean(p.suburb || p.district || p.locality) || null,
+    city: clean(p.city) || null,
+    state: clean(p.state) || null,
+    country: clean(p.country) || null,
+    postcode: clean(p.postcode) || null,
+    has_address: Boolean(housenumber || street),
+    label: labelFromProperties(p) || clean(p.name) || `${lat}, ${lng}`,
+    provider: 'photon',
+  };
 }
 
-/** Turn a free-form address (or suburb/city) into coordinates. */
-export async function geocode(queryText, { limit = 1, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+function nominatimPlace(hit) {
+  const a = (hit && hit.address) || {};
+  const lat = Number(hit && hit.lat);
+  const lng = Number(hit && hit.lon);
+  if (!validLatLng(lat, lng)) return null;
+  const housenumber = clean(a.house_number) || null;
+  const street = clean(a.road || a.pedestrian || a.footway || a.path) || null;
+  return {
+    lat,
+    lng,
+    name: clean(hit.name) || null,
+    housenumber,
+    street,
+    suburb: clean(a.suburb || a.neighbourhood) || null,
+    city: clean(a.city || a.town || a.village || a.municipality) || null,
+    state: clean(a.state) || null,
+    country: clean(a.country) || null,
+    postcode: clean(a.postcode) || null,
+    has_address: Boolean(housenumber || street),
+    label: clean(hit.display_name) || '',
+    provider: 'nominatim',
+  };
+}
+
+/**
+ * Score a candidate so an exact street address beats a suburb or city centroid.
+ * This is what stops "12 Main Rd" from silently resolving to the middle of the
+ * suburb it happens to sit in.
+ */
+export function addressScore(place, query) {
+  if (!place) return -1;
+  let score = 0;
+  if (place.housenumber) score += 6;
+  if (place.street) score += 3;
+  if (place.postcode) score += 1;
+  if (place.city) score += 1;
+  if (place.has_address) score += 2;
+  const label = String(place.label || '').toLowerCase();
+  const tokens = clean(query).toLowerCase().split(/[ ,]+/).filter((token) => token.length > 1);
+  tokens.forEach((token) => { if (label.includes(token)) score += 2; });
+  return score;
+}
+
+/** Choose the most precise candidate for a free-form address query. */
+export function pickBestPlace(places, query) {
+  const list = Array.isArray(places) ? places.filter(Boolean) : [];
+  if (!list.length) return null;
+  let best = list[0];
+  let bestScore = addressScore(best, query);
+  for (let i = 1; i < list.length; i += 1) {
+    const score = addressScore(list[i], query);
+    if (score > bestScore) {
+      best = list[i];
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+/**
+ * Return several candidate locations so a caller can offer address
+ * suggestions. Photon (fast, OSM-backed) first; its South African coverage is
+ * patchy, so we fall back to Nominatim.
+ */
+export async function geocodeCandidates(queryText, { limit = 6, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   const q = clean(queryText);
-  if (q.length < 3) return null;
+  if (q.length < 3) return [];
+  const capped = Math.max(1, Math.min(Number(limit) || 6, 10));
 
-  const photonUrl = `${PHOTON_URL}?q=${encodeURIComponent(q)}&limit=${Math.max(1, Math.min(limit, 5))}`;
+  const photonUrl = `${PHOTON_URL}?q=${encodeURIComponent(q)}&limit=${capped}&lang=en`;
   const photon = await fetchJson(photonUrl, { timeoutMs });
-  const feature = photon && Array.isArray(photon.features) ? photon.features[0] : null;
-  const coords = feature && feature.geometry && feature.geometry.coordinates;
-  if (coords && coords.length >= 2 && validLatLng(coords[1], coords[0])) {
-    return {
-      lat: Number(coords[1]),
-      lng: Number(coords[0]),
-      label: labelFromProperties(feature.properties) || q,
-      name: nicknameFromProperties(feature.properties),
-      provider: 'photon',
-    };
-  }
+  const features = photon && Array.isArray(photon.features) ? photon.features : [];
+  const fromPhoton = features.map(photonPlace).filter(Boolean);
+  if (fromPhoton.length) return fromPhoton;
 
-  // Photon is fast but its South African coverage is patchy. Fall back to OSM.
-  const parts = [];
-  if (q) parts.push(`q=${encodeURIComponent(q)}`);
-  parts.push('format=jsonv2', 'limit=1', 'addressdetails=1', 'countrycodes=za');
+  const parts = [`q=${encodeURIComponent(q)}`];
+  parts.push('format=jsonv2', `limit=${capped}`, 'addressdetails=1', 'countrycodes=za');
   const osm = await fetchJson(`${NOMINATIM_URL}?${parts.join('&')}`, { timeoutMs });
-  const hit = Array.isArray(osm) ? osm[0] : null;
-  if (hit && validLatLng(hit.lat, hit.lon)) {
-    return {
-      lat: Number(hit.lat),
-      lng: Number(hit.lon),
-      label: clean(hit.display_name) || q,
-      name: nicknameFromProperties(hit.address || {}),
-      provider: 'nominatim',
-    };
-  }
+  return (Array.isArray(osm) ? osm : []).map(nominatimPlace).filter(Boolean);
+}
 
-  return null;
+/**
+ * Turn a free-form address (or suburb/city) into the most precise coordinates
+ * we can find. Prefers an exact street address over a suburb centroid.
+ */
+export async function geocode(queryText, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  const candidates = await geocodeCandidates(queryText, { limit: 5, timeoutMs });
+  return pickBestPlace(candidates, queryText);
 }
 
 /** Resolve coordinates into a human-readable suburb/city label. */

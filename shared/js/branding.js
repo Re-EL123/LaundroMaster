@@ -1,5 +1,7 @@
 import { uploadImage, publicUrl } from './uploads.js';
 import { escapeHtml } from './format.js';
+import { currentPosition } from './geolocation.js';
+import { attachPlaceAutocomplete } from './places.js';
 
 // Renders per-laundromat branding controls (logo + gallery + details) into `host`.
 export function mountBranding(host, laundromats = []) {
@@ -29,15 +31,16 @@ export function mountBranding(host, laundromats = []) {
         <div class="field"><label class="label">Description</label>
           <textarea class="input" rows="3" data-field="description">${escapeHtml(l.description || '')}</textarea></div>
         <div class="field"><label class="label">Address</label>
-          <input class="input" data-field="address" value="${escapeHtml(l.address || '')}"></div>
+          <div class="place-ac"><input class="input" data-field="address" autocomplete="off" placeholder="Start typing the street address…" value="${escapeHtml(l.address || '')}"></div>
+          <p class="text-xs text-muted">Pick a suggestion to store the exact street address, not just the suburb.</p></div>
         <div class="field">
-          <label class="label">Map location</label>
-          <div class="flex wrap" style="gap:var(--space-3)">
+          <label class="label">Map pin</label>
+          <div class="flex wrap" style="gap:var(--space-2)">
             <input class="input" data-field="latitude" inputmode="decimal" placeholder="Latitude" value="${l.latitude != null ? Number(l.latitude) : ''}">
             <input class="input" data-field="longitude" inputmode="decimal" placeholder="Longitude" value="${l.longitude != null ? Number(l.longitude) : ''}">
-            <button type="button" class="btn btn-secondary" data-geocode>Find from address</button>
+            <button type="button" class="btn btn-secondary" data-locate>Use my location</button>
           </div>
-          <p class="text-xs text-muted" data-geo-msg>Coordinates let customers find you with “Near me”. Saving an address fills them automatically.</p>
+          <p class="text-xs text-muted" data-geo-msg>Use an address suggestion or “Use my location” for an exact pin. Customers' “Near me” search relies on these coordinates.</p>
         </div>
         <div class="field"><label class="label">Phone</label>
           <input class="input" data-field="phone" value="${escapeHtml(l.phone || '')}"></div>
@@ -61,7 +64,7 @@ export function mountBranding(host, laundromats = []) {
 
     wireLogo(card, id, state);
     wireGallery(card, id, state);
-    wireGeocode(card);
+    wireLocation(card);
     wireSave(card, id, state);
   });
 }
@@ -117,33 +120,50 @@ function wireGallery(card, id, state) {
   });
 }
 
-function wireGeocode(card) {
-  const button = card.querySelector('[data-geocode]');
+function wireLocation(card) {
+  const addressInput = card.querySelector('[data-field="address"]');
+  const latInput = card.querySelector('[data-field="latitude"]');
+  const lngInput = card.querySelector('[data-field="longitude"]');
   const msg = card.querySelector('[data-geo-msg]');
-  if (!button) return;
-  button.addEventListener('click', async () => {
-    const address = card.querySelector('[data-field="address"]').value.trim();
-    if (!address) {
-      msg.textContent = 'Add an address first.';
-      return;
-    }
-    button.disabled = true;
-    button.textContent = 'Finding…';
-    try {
-      const { api } = await import('./api-client.js');
-      const { data } = await api.get(`/geo?action=geocode&q=${encodeURIComponent(address)}`);
-      if (!data) {
-        msg.textContent = 'Could not find that address. Drop a pin manually or make the address more specific.';
-        return;
+  const locateBtn = card.querySelector('[data-locate]');
+
+  const setPin = (lat, lng) => {
+    latInput.value = Number(lat).toFixed(6);
+    lngInput.value = Number(lng).toFixed(6);
+  };
+
+  // Choosing a suggestion stores the exact street coordinates, so "Near me"
+  // never lands on the middle of a suburb.
+  attachPlaceAutocomplete(addressInput, {
+    onSelect(place) {
+      if (Number.isFinite(Number(place.lat)) && Number.isFinite(Number(place.lng))) {
+        setPin(place.lat, place.lng);
       }
-      card.querySelector('[data-field="latitude"]').value = Number(data.lat).toFixed(6);
-      card.querySelector('[data-field="longitude"]').value = Number(data.lng).toFixed(6);
-      msg.textContent = `Matched: ${data.label || address}`;
+      msg.textContent = `Exact match: ${place.label}`;
+    },
+  });
+
+  if (!locateBtn) return;
+  locateBtn.addEventListener('click', async () => {
+    locateBtn.disabled = true;
+    msg.textContent = 'Finding your location…';
+    try {
+      const pos = await currentPosition({ enableHighAccuracy: true, timeout: 9000 });
+      setPin(pos.lat, pos.lng);
+      try {
+        const { api } = await import('./api-client.js');
+        const { data } = await api.get(`/geo?action=reverse&lat=${pos.lat}&lng=${pos.lng}`);
+        if (data && data.label) addressInput.value = data.label;
+        msg.textContent = data && data.label
+          ? `Pinned at ${data.label}`
+          : `Pinned at ${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}`;
+      } catch {
+        msg.textContent = `Pinned at ${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}`;
+      }
     } catch (err) {
-      msg.textContent = err.message || 'Could not look up that address.';
+      msg.textContent = err.message || 'Could not read your location.';
     } finally {
-      button.disabled = false;
-      button.textContent = 'Find from address';
+      locateBtn.disabled = false;
     }
   });
 }

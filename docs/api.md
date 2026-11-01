@@ -20,7 +20,7 @@ Authentication uses `Authorization: Bearer <access_token>` obtained from
 | 10 | `/api/ads` | GET, POST | active ads by `?placement=`; `?action=impression|click` counters |
 | 11 | `/api/owner` | GET, POST | `stats`, `analytics`, `services`, `earnings`, `laundromats`, `branding`, `team`, `plan`, `promotions`, `payouts`, `customers` (Owner); `service-create`, `service-update`, `service-delete`, `promote`, `payout-request`, `staff-invite`, `staff-update`, `staff-remove`, `laundromat-update` |
 | 12 | `/api/admin` | GET, POST | `stats` (incl. GMV, MRR, platform revenue), `analytics`, `laundromats`, `verifications`, `users`, `commissions`, `payouts`, `refunds`, `promotions`, `plans`, `subscriptions`, `settings`, `audit` (Admin); `verify`, `settings-update`, `plan-upsert`, `plan-toggle`, `user-update`, `user-roles`, `laundromat-update`, `payout-update`, `refund-update`, `promotion-update`, `commission-update`, `broadcast` |
-| 13 | `/api/geo` | GET, POST | `?action=search&lat=&lng=&radius_km=&q=` (geocode fallback + distance ranking; strict radius by default — `include_far=1` opts into farther results, `all=1` lists every approved partner), `?action=geocode&q=`, `?action=reverse&lat=&lng=`, `?action=backfill` (Admin, POST) |
+| 13 | `/api/geo` | GET, POST | `?action=search&lat=&lng=&radius_km=&q=` (geocode fallback + distance ranking; strict radius by default — `include_far=1` opts into farther results, `all=1` lists every approved partner), `?action=geocode&q=`, `?action=places&q=&limit=` (address autocomplete — several Photon/Nominatim candidates, most precise first), `?action=reverse&lat=&lng=`, `?action=backfill` (Admin, POST) |
 
 ## Conventions
 - Validate all query params and bodies (Zod, `api/_lib/validation.js`).

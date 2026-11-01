@@ -5,6 +5,7 @@ import { laundromatCard } from './components.js';
 import { param, escapeHtml } from '../../../shared/js/format.js';
 import { renderAds } from '../../../shared/js/ads.js';
 import { currentPosition, currentPositionIfPermitted, permissionState } from '../../../shared/js/geolocation.js';
+import { attachPlaceAutocomplete } from '../../../shared/js/places.js';
 
 mountCustomerHeader('discover');
 
@@ -46,6 +47,20 @@ if (radiusSel) {
 
 let origin = null;
 let lastMeta = null;
+let pickedPlace = null;
+
+// Address autocomplete: picking a suggestion searches from that exact pin, so
+// results reflect the real address rather than the centre of the suburb.
+attachPlaceAutocomplete(input, {
+  onSelect(place) {
+    pickedPlace = place;
+    input.value = place.label || place.name || input.value;
+    includeFar = false;
+    showAll = false;
+    geoSearch({ lat: place.lat, lng: place.lng });
+  },
+});
+input.addEventListener('input', () => { pickedPlace = null; });
 
 function syncUrl() {
   const url = new URL(location.href);
@@ -362,6 +377,10 @@ form.addEventListener('submit', (e) => {
   includeFar = false;
   showAll = false;
   const v = input.value.trim();
+  if (pickedPlace && (pickedPlace.label || '') === v) {
+    geoSearch({ lat: pickedPlace.lat, lng: pickedPlace.lng });
+    return;
+  }
   if (v) geoSearch({ q: v });
   else geoSearch({});
 });

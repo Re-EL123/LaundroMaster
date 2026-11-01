@@ -4,7 +4,7 @@ import { adminClient } from './_lib/supabase-admin.js';
 import { query, body } from './_lib/req.js';
 import { getUser, isAdmin } from './_lib/auth.js';
 import {
-  geocode, reverseGeocode, validLatLng, rankByDistance,
+  geocode, geocodeCandidates, reverseGeocode, validLatLng, rankByDistance,
 } from './_lib/geo.js';
 
 const SEARCH_FIELDS = [
@@ -62,9 +62,19 @@ export default createHandler(async function handler(req, res) {
 
   if (action === 'geocode') {
     const term = q.q || body(req).q || q.address;
-    const loc = await geocode(term, { limit: 1 });
+    const loc = await geocode(term);
     if (!loc) return res.status(200).json(successEnvelope(null));
     return res.status(200).json(successEnvelope(loc));
+  }
+
+  // Candidate list for the address autocomplete: several matches so the user
+  // can pick the exact street address instead of an area centroid.
+  if (action === 'places') {
+    const term = q.q || body(req).q || q.address;
+    if (!term || String(term).trim().length < 3) return res.status(200).json(successEnvelope([]));
+    const limit = Math.min(Number(q.limit || body(req).limit) || 6, 10);
+    const places = await geocodeCandidates(term, { limit });
+    return res.status(200).json(successEnvelope(places));
   }
 
   if (action === 'reverse') {
