@@ -23,7 +23,7 @@ export async function renderAds() {
   const roots = ['heroAds', 'bannerAds'].map((id) => document.getElementById(id)).filter(Boolean);
   if (!roots.length) return;
   try {
-    const { data } = await api.get('/ads');
+    const { data } = await api.get('/laundromats?action=ads');
     const items = Array.isArray(data) ? data : [];
     renderHero(items.filter((a) => a.placement === 'hero'));
     renderBanner(items.filter((a) => a.placement === 'banner'));
@@ -84,9 +84,9 @@ function renderPopup(items) {
   setTimeout(close, 15000);
 }
 
-function trackClick(id) { api.post(`/ads?id=${encodeURIComponent(id)}&action=click`).catch(() => {}); }
+function trackClick(id) { api.post(`/laundromats?action=ad-click&id=${encodeURIComponent(id)}`).catch(() => {}); }
 function trackImpression(id) {
   if (seen(`lm_ad_imp_${id}`)) return;
   markSeen(`lm_ad_imp_${id}`);
-  api.post(`/ads?id=${encodeURIComponent(id)}&action=impression`).catch(() => {});
+  api.post(`/laundromats?action=ad-impression&id=${encodeURIComponent(id)}`).catch(() => {});
 }

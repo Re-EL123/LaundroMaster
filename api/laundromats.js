@@ -13,6 +13,22 @@ export default createHandler(async function handler(req, res) {
   if (!supa) return res.status(503).json(errorEnvelope(new ApiError('NOT_CONFIGURED', 'Supabase not configured', 503)));
 
   if (req.method === 'GET') {
+    // Ads are served from this function instead of their own: the Hobby plan
+    // allows at most 12 serverless functions per deployment.
+    if (action === 'ads') {
+      let request = supa.from('ads').select('*')
+        .eq('is_active', true)
+        .lte('starts_at', new Date().toISOString())
+        .order('priority', { ascending: false })
+        .order('created_at', { ascending: false });
+      if (q.placement) request = request.eq('placement', q.placement);
+      const { data, error } = await request;
+      if (error) return res.status(500).json(errorEnvelope(error));
+      const now = Date.now();
+      const rows = (data || []).filter((a) => !a.ends_at || new Date(a.ends_at).getTime() > now);
+      return res.status(200).json(successEnvelope(rows));
+    }
+
     if (action === 'services') {
       const id = q.id;
       if (!id) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing laundromat id')));
@@ -113,6 +129,14 @@ export default createHandler(async function handler(req, res) {
           await supa.from('promotions').update({ clicks: (Number(promo.clicks) || 0) + 1 }).eq('id', promo.id);
         } catch { /* ignore */ }
       }
+      return res.status(200).json(successEnvelope({ ok: true }));
+    }
+
+    if (action === 'ad-click' || action === 'ad-impression') {
+      const id = q.id || body(req).id;
+      if (!id) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing ad id')));
+      const fn = action === 'ad-click' ? 'increment_ad_click' : 'increment_ad_impression';
+      await supa.rpc(fn, { ad_id: id }).catch(() => {});
       return res.status(200).json(successEnvelope({ ok: true }));
     }
     return res.status(405).json(errorEnvelope(new ApiError('METHOD_NOT_ALLOWED', 'Method not allowed', 405)));
