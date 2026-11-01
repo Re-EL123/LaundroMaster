@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   haversineKm, validLatLng, rankByDistance, addressQuery, addressScore, pickBestPlace,
-  geocodeCandidates,
+  geocodeCandidates, reverseGeocode,
 } from '../api/_lib/geo.js';
 
 const JOBURG = { lat: -26.2041, lng: 28.0473 };
@@ -168,6 +168,59 @@ test('geocodeCandidates keeps South African Photon hits without calling Nominati
     assert.equal(places.length, 1);
     assert.equal(places[0].provider, 'photon');
     assert.equal(places[0].city, 'Johannesburg');
+  } finally {
+    stub.restore();
+  }
+});
+
+test('reverseGeocode returns a short street label, not the raw display_name', async () => {
+  const stub = stubFetch([], {
+    display_name: '12 Main Rd, Sandton, Johannesburg Ward 100, City of Johannesburg'
+      + ' Metropolitan Municipality, Gauteng, 2196, South Africa',
+    address: {
+      house_number: '12', road: 'Main Rd', suburb: 'Sandton', city: 'Johannesburg', postcode: '2196',
+    },
+  });
+  try {
+    const loc = await reverseGeocode(-26.1076, 28.0567);
+    assert.equal(loc.label, '12 Main Rd, Sandton, Johannesburg, 2196');
+    assert.equal(loc.city, 'Johannesburg');
+    assert.ok(stub.calls[0].includes('zoom=18'), 'reverse must ask for street precision');
+  } finally {
+    stub.restore();
+  }
+});
+
+test('reverseGeocode trims ward/municipality noise when no street is mapped', async () => {
+  const stub = stubFetch([], {
+    display_name: 'eThekwini Ward 45, KwaMashu, eThekwini Metropolitan Municipality,'
+      + ' KwaZulu-Natal, 4360, South Africa',
+    address: { suburb: 'eThekwini Ward 45', city: 'KwaMashu', postcode: '4360' },
+  });
+  try {
+    const loc = await reverseGeocode(-29.7333, 30.9833);
+    assert.equal(loc.label, 'eThekwini Ward 45, KwaMashu, 4360');
+  } finally {
+    stub.restore();
+  }
+});
+
+test('reverseGeocode falls back to display_name when the response has no address detail', async () => {
+  const stub = stubFetch([], { display_name: 'Somewhere, South Africa' });
+  try {
+    const loc = await reverseGeocode(-26.2041, 28.0473);
+    assert.equal(loc.label, 'Somewhere, South Africa');
+    assert.equal(loc.suburb, null);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('reverseGeocode rejects invalid coordinates without calling the provider', async () => {
+  const stub = stubFetch([], { display_name: 'never used' });
+  try {
+    assert.equal(await reverseGeocode(null, null), null);
+    assert.equal(stub.calls.length, 0);
   } finally {
     stub.restore();
   }

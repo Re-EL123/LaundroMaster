@@ -147,21 +147,45 @@ function wireLocation(card) {
   });
 
   if (!locateBtn) return;
+  // A browser fix is often a network/IP estimate rather than GPS. Those land
+  // kilometres away — frequently in a different town — and a wrong pin makes
+  // every customer's "near me" search match the business in the wrong place.
+  // So a coarse fix is reported, but never written into the listing.
+  const MAX_ACCURACY_M = 1000;
   locateBtn.addEventListener('click', async () => {
     locateBtn.disabled = true;
     msg.textContent = 'Finding your location…';
     try {
       const pos = await currentPosition({ enableHighAccuracy: true, timeout: 9000 });
-      setPin(pos.lat, pos.lng);
+      const accuracy = Number(pos.accuracy);
+      const coarse = !Number.isFinite(accuracy) || accuracy > MAX_ACCURACY_M;
+
+      let label = null;
       try {
         const { api } = await import('./api-client.js');
         const { data } = await api.get(`/geo?action=reverse&lat=${pos.lat}&lng=${pos.lng}`);
-        if (data && data.label) addressInput.value = data.label;
-        msg.textContent = data && data.label
-          ? `Pinned at ${data.label}`
-          : `Pinned at ${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}`;
-      } catch {
-        msg.textContent = `Pinned at ${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}`;
+        if (data && data.label) label = data.label;
+      } catch { /* reverse geocoding is best effort */ }
+
+      if (coarse) {
+        const span = Number.isFinite(accuracy)
+          ? `about ${Math.max(1, Math.round(accuracy / 1000))} km`
+          : 'a very wide area';
+        msg.textContent = `Your device only placed you within ${span}`
+          + (label ? `, near “${label}”` : '')
+          + '. That is a network estimate rather than GPS and is often the wrong town, '
+          + 'so the pin was left untouched. Type your street address above and pick a suggestion, '
+          + 'or enter the coordinates directly.';
+        return;
+      }
+
+      setPin(pos.lat, pos.lng);
+      const precise = ` (±${Math.round(accuracy)} m)`;
+      if (label) {
+        addressInput.value = label;
+        msg.textContent = `Pinned at ${label}${precise}`;
+      } else {
+        msg.textContent = `Pinned at ${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}${precise}`;
       }
     } catch (err) {
       msg.textContent = err.message || 'Could not read your location.';

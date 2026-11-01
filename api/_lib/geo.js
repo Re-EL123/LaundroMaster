@@ -201,15 +201,39 @@ export async function geocode(queryText, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}
   return pickBestPlace(candidates, queryText);
 }
 
-/** Resolve coordinates into a human-readable suburb/city label. */
+/**
+ * Nominatim's `display_name` is the full administrative ancestry, e.g.
+ * "eThekwini Ward 45, KwaMashu, eThekwini Metropolitan Municipality,
+ * KwaZulu-Natal, 4360, South Africa". Written into an address box that value is
+ * unreadable and re-geocodes to a ward centroid, so build a short street-first
+ * label from the structured address instead.
+ */
+function reverseLabel(data) {
+  const a = (data && data.address) || {};
+  const street = [clean(a.house_number), clean(a.road || a.pedestrian || a.footway)]
+    .filter(Boolean).join(' ');
+  const suburb = clean(a.suburb || a.neighbourhood);
+  const city = clean(a.city || a.town || a.village || a.municipality);
+  const parts = [
+    street,
+    suburb && suburb !== city ? suburb : '',
+    city,
+    clean(a.postcode),
+  ].filter(Boolean);
+  return parts.join(', ') || clean(data && data.display_name) || null;
+}
+
+/** Resolve coordinates into a human-readable street/suburb/city label. */
 export async function reverseGeocode(lat, lng, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   if (!validLatLng(lat, lng)) return null;
+  // zoom=18 asks for building/street precision, so a point in an under-mapped
+  // township still falls back to a nearby street instead of a ward boundary.
   const url = `${NOMINATIM_REVERSE_URL}?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`
-    + '&format=jsonv2&zoom=16&addressdetails=1';
+    + '&format=jsonv2&zoom=18&addressdetails=1';
   const data = await fetchJson(url, { timeoutMs });
   if (!data) return null;
   return {
-    label: clean(data.display_name) || null,
+    label: reverseLabel(data),
     suburb: clean(data.address && (data.address.suburb || data.address.neighbourhood)) || null,
     city: clean(data.address && (data.address.city || data.address.town || data.address.village)) || null,
     postcode: clean(data.address && data.address.postcode) || null,
