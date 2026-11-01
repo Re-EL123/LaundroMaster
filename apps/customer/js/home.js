@@ -23,6 +23,9 @@ function discoverHref({ lat, lng, near, far = false, radius = RADIUS_KM, all = f
   if (lat != null && lng != null) {
     params.set('lat', String(lat));
     params.set('lng', String(lng));
+    // Coordinates we pass on came from the device, so let Discover re-read the
+    // position rather than inheriting a possibly stale snapshot of it.
+    params.set('loc', '1');
   } else if (near) {
     params.set('near', near);
   }
@@ -52,9 +55,15 @@ function show(items, { outside = 0, unknown = 0, radius = RADIUS_KM, lat, lng, n
   }
 
   if (outside > 0) {
+    // The nearby list is empty because everything is beyond the radius. A
+    // device reading can point at the wrong town entirely, so name that
+    // possibility rather than letting the customer assume there is nothing.
+    const hint = lat != null && lng != null && !near
+      ? ' We placed you using your device\u2019s location, which can be approximate \u2014 type your suburb if that is not where you are.'
+      : '';
     emptyCTA(list, {
       title: `Nothing within ${radius} km`,
-      message: `${outside} partner${outside === 1 ? ' is' : 's are'} further away. We only show them when you choose to look further.`,
+      message: `${outside} partner${outside === 1 ? ' is' : 's are'} further away. We only show them when you choose to look further.${hint}`,
       href: discoverHref({ lat, lng, near, far: true, radius }),
       label: 'Show further afield',
     });

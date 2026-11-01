@@ -48,6 +48,10 @@ if (radiusSel) {
 let origin = null;
 let lastMeta = null;
 let pickedPlace = null;
+// True when `origin` is a snapshot of the device position rather than a place
+// the customer chose. Those are re-resolved on load instead of being trusted
+// from the URL, and are called out when they hide every nearby partner.
+let originFromDevice = false;
 
 // Address autocomplete: picking a suggestion searches from that exact pin, so
 // results reflect the real address rather than the centre of the suburb.
@@ -77,14 +81,21 @@ function syncUrl() {
     url.searchParams.set('lat', String(origin.lat));
     url.searchParams.set('lng', String(origin.lng));
     url.searchParams.delete('near');
+    // Mark a device-derived origin so a reload re-reads the position: keeping
+    // only the coordinates would freeze the customer wherever the device last
+    // placed them, even after they moved or fixed their device location.
+    if (originFromDevice) url.searchParams.set('loc', '1');
+    else url.searchParams.delete('loc');
   } else if (origin && origin.q) {
     url.searchParams.set('near', origin.q);
     url.searchParams.delete('lat');
     url.searchParams.delete('lng');
+    url.searchParams.delete('loc');
   } else {
     url.searchParams.delete('lat');
     url.searchParams.delete('lng');
     url.searchParams.delete('near');
+    url.searchParams.delete('loc');
   }
   history.replaceState(null, '', url);
 }
@@ -133,6 +144,12 @@ function rangeNotice(meta, nearText, { filteredOut = false } = {}) {
   const anchor = nearText ? escapeHtml(nearText) : '';
   const withinPhrase = anchor ? `within ${radiusKm} km of ${anchor}` : `within ${radiusKm} km of you`;
   const awayPhrase = anchor ? `more than ${radiusKm} km from ${anchor}` : `more than ${radiusKm} km away`;
+  // A device reading can be a network estimate from the wrong town. Say so when
+  // it empties the list, so the customer knows to type their suburb instead of
+  // concluding there is nothing near them.
+  const deviceHint = originFromDevice
+    ? ' We placed you using your device\u2019s location, which can be approximate \u2014 type your suburb above if that is not where you are.'
+    : '';
 
   if (showAll) {
     moreWrap.innerHTML = `<div class="callout">
@@ -173,7 +190,7 @@ function rangeNotice(meta, nearText, { filteredOut = false } = {}) {
       : '';
     moreWrap.innerHTML = `<div class="callout">
       <div><strong class="text-sm">${within ? `${within} ${withinPhrase}` : `Nothing ${withinPhrase}`}</strong>
-        <p class="text-xs text-muted">${outside} more partner${outside === 1 ? ' is' : 's are'} ${awayPhrase}. They stay hidden unless you choose to see them.</p></div>
+        <p class="text-xs text-muted">${outside} more partner${outside === 1 ? ' is' : 's are'} ${awayPhrase}. They stay hidden unless you choose to see them.${deviceHint}</p></div>
       <div class="flex wrap">
         <button class="btn btn-primary text-sm" type="button" data-action="widen">Show further afield</button>
         ${wider}
@@ -188,7 +205,7 @@ function rangeNotice(meta, nearText, { filteredOut = false } = {}) {
       : '';
     moreWrap.innerHTML = `<div class="callout">
       <div><strong class="text-sm">No partners ${withinPhrase}</strong>
-        <p class="text-xs text-muted">There are no approved laundromats ${where} yet. Try a wider radius or another suburb.${noPin}</p></div>
+        <p class="text-xs text-muted">There are no approved laundromats ${where} yet. Try a wider radius or another suburb.${noPin}${deviceHint}</p></div>
       <div class="flex wrap">
         ${radiusKm < 100 ? `<button class="btn btn-secondary text-sm" type="button" data-action="radius100">Widen to 100 km</button>` : ''}
         <button class="btn btn-secondary text-sm" type="button" data-action="all">Browse all partners</button>
@@ -252,12 +269,14 @@ function render(items, { nearText = '', total = 0 } = {}) {
 
 function rerun() {
   if (showAll) return geoSearch({ all: true, q: input.value.trim() || undefined });
-  if (origin && origin.lat != null) return geoSearch({ lat: origin.lat, lng: origin.lng });
+  if (origin && origin.lat != null) {
+    return geoSearch({ lat: origin.lat, lng: origin.lng, fromDevice: originFromDevice });
+  }
   if (origin && origin.q) return geoSearch({ q: origin.q });
   return geoSearch({});
 }
 
-async function geoSearch({ lat, lng, q, all = false } = {}) {
+async function geoSearch({ lat, lng, q, all = false, fromDevice = false } = {}) {
   skeleton(list, 6, 180);
   resultCount.textContent = '';
   if (moreWrap) moreWrap.innerHTML = '';
@@ -286,6 +305,7 @@ async function geoSearch({ lat, lng, q, all = false } = {}) {
     if (lat != null && lng != null) origin = { lat, lng };
     else if (q) origin = { q };
     else if (!showAll) origin = null;
+    originFromDevice = Boolean(fromDevice) && origin != null && origin.lat != null;
 
     // Only claim "your location" when the server actually anchored this
     // search, otherwise a stale origin from an earlier request leaks into the
@@ -335,7 +355,7 @@ async function locateAndSearch({ interactive = false } = {}) {
   showAll = false;
   try {
     const pos = await bestEffortPosition();
-    await geoSearch({ lat: pos.lat, lng: pos.lng });
+    await geoSearch({ lat: pos.lat, lng: pos.lng, fromDevice: true });
   } catch (err) {
     // No browser location: try the address saved on the customer's profile.
     const address = await savedAddressQuery();
@@ -427,12 +447,18 @@ nearBtn.addEventListener('click', () => locateAndSearch({ interactive: true }));
 async function init() {
   const lat = Number(param('lat'));
   const lng = Number(param('lng'));
+  const hasUrlOrigin = Boolean(param('lat')) && Boolean(param('lng'))
+    && Number.isFinite(lat) && Number.isFinite(lng);
+  // An origin the customer chose (a picked address, a suburb) is honoured as
+  // written. One that only records where their device was is re-read below, so
+  // a stale or wrong reading cannot pin them to it forever.
+  const urlOriginFromDevice = param('loc') === '1';
   const near = param('near');
   if (showAll) {
     await geoSearch({ all: true, q: input.value.trim() || undefined });
     return;
   }
-  if (Number.isFinite(lat) && Number.isFinite(lng) && param('lat') && param('lng')) {
+  if (hasUrlOrigin && !urlOriginFromDevice) {
     await geoSearch({ lat, lng });
     return;
   }
@@ -445,9 +471,15 @@ async function init() {
   if (await permissionState() === 'granted') {
     const pos = await currentPositionIfPermitted();
     if (pos) {
-      await geoSearch({ lat: pos.lat, lng: pos.lng });
+      await geoSearch({ lat: pos.lat, lng: pos.lng, fromDevice: true });
       return;
     }
+  }
+  // Could not re-read the device (permission revoked, or a one-off failure):
+  // the recorded coordinates still beat showing nothing.
+  if (hasUrlOrigin) {
+    await geoSearch({ lat, lng, fromDevice: true });
+    return;
   }
   const saved = await savedAddressQuery();
   if (saved) {
