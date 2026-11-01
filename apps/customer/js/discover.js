@@ -118,8 +118,14 @@ function ofLabel(nearText) {
   return nearText ? `of ${nearText}` : 'of you';
 }
 
-function rangeNotice(meta, nearText) {
+function rangeNotice(meta, nearText, { filteredOut = false } = {}) {
   if (!moreWrap) return;
+  // The list is empty only because the customer's own rating/price filters
+  // removed every match; radius counts would contradict the empty state.
+  if (filteredOut) {
+    moreWrap.innerHTML = '';
+    return;
+  }
   const within = Number(meta.totalWithin) || 0;
   const outside = Number(meta.totalOutside) || 0;
   const unknown = Number(meta.totalUnknown) || 0;
@@ -216,16 +222,22 @@ function locationPrompt() {
   if (moreWrap) moreWrap.innerHTML = '';
 }
 
-function render(items, { nearText = '' } = {}) {
+function render(items, { nearText = '', total = 0 } = {}) {
   const hasOrigin = Boolean(lastMeta && lastMeta.origin);
   if (!items.length) {
     resultCount.textContent = '';
     const term = input.value.trim() || nearText;
-    emptyState(list, !hasOrigin
-      ? `No laundromats match “${term}”.`
-      : includeFar
-        ? 'No laundromats match your filters.'
-        : `No laundromats within ${radiusKm} km ${ofLabel(nearText)}.`);
+    let message;
+    // `total` is the server's match count before the client-side filters ran.
+    if (total) message = 'No laundromats match your filters.';
+    else if (showAll || includeFar) {
+      message = term
+        ? `No partners match “${term}”.`
+        : 'No partners are listed yet. New partners are joining soon.';
+    } else if (hasOrigin) message = `No laundromats within ${radiusKm} km ${ofLabel(nearText)}.`;
+    else if (term) message = `No laundromats match “${term}”.`;
+    else message = 'No laundromats to show yet.';
+    emptyState(list, message);
     return;
   }
   resultCount.textContent = showAll
@@ -275,7 +287,10 @@ async function geoSearch({ lat, lng, q, all = false } = {}) {
     else if (q) origin = { q };
     else if (!showAll) origin = null;
 
-    const nearText = q || meta.originLabel || (origin && origin.lat != null ? 'your location' : '');
+    // Only claim "your location" when the server actually anchored this
+    // search, otherwise a stale origin from an earlier request leaks into the
+    // results copy (e.g. "Browse all" showing "No laundromats match your location").
+    const nearText = q || meta.originLabel || (meta.origin && origin && origin.lat != null ? 'your location' : '');
     if (meta.needsLocation) {
       origin = null;
       syncUrl();
@@ -292,8 +307,9 @@ async function geoSearch({ lat, lng, q, all = false } = {}) {
     }
 
     syncUrl();
-    render(applySort(applyFilters(rows)), { nearText });
-    rangeNotice(meta, nearText);
+    const visible = applySort(applyFilters(rows));
+    render(visible, { nearText, total: rows.length });
+    rangeNotice(meta, nearText, { filteredOut: !visible.length && rows.length > 0 });
   } catch (err) {
     errorState(list, err.message || 'Failed to search near you.');
     if (moreWrap) moreWrap.innerHTML = '';

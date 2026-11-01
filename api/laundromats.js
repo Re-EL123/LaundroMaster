@@ -36,6 +36,11 @@ export default createHandler(async function handler(req, res) {
       const { data: biz } = await supa.from('laundromats').select('id, owner_id, verification_status').eq('id', id).maybeSingle();
       if (!biz) return res.status(404).json(errorEnvelope(new ApiError('NOT_FOUND', 'Laundromat not found', 404)));
       const privileged = isAdmin(ctx) || (ctx.user && biz.owner_id === ctx.user.id);
+      // Same rule as the detail endpoint above: a listing that is not approved
+      // must not leak its services just because it is addressed differently.
+      if (!privileged && biz.verification_status !== 'approved') {
+        return res.status(404).json(errorEnvelope(new ApiError('NOT_FOUND', 'Laundromat not found', 404)));
+      }
       let request = supa.from('services').select('*').eq('laundromat_id', id).order('base_price', { ascending: true });
       if (!privileged) request = request.eq('is_active', true);
       const { data, error } = await request;

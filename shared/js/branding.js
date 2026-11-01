@@ -21,6 +21,9 @@ export function mountBranding(host, laundromats = []) {
           <div>
             <h3 class="card-title">${escapeHtml(l.name || 'Laundromat')}</h3>
             <p class="text-muted text-sm">${escapeHtml(l.verification_status || '')}</p>
+            ${l.verification_status && l.verification_status !== 'approved'
+              ? '<p class="text-xs text-muted">Hidden from customer search until an admin approves this listing — correct coordinates alone will not make it appear.</p>'
+              : ''}
             <button type="button" class="btn btn-secondary" data-logo-btn>Change logo</button>
           </div>
         </div>

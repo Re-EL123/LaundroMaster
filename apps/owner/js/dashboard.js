@@ -79,7 +79,9 @@ const FIX_META = {
       return;
     }
     const primary = list[0];
-    if (list.some((l) => l.verification_status === 'pending')) {
+    if (list.some((l) => l.verification_status === 'suspended')) {
+      bannerEl.innerHTML = '<div class="banner banner-danger"><div><strong>Listing suspended</strong><p class="text-sm">Your listing is hidden from customers. Contact support to resolve it.</p></div></div>';
+    } else if (list.some((l) => l.verification_status === 'pending')) {
       bannerEl.innerHTML = '<div class="banner banner-info"><div><strong>Verification in progress</strong><p class="text-sm">Our team is reviewing your listing. You can keep preparing your services in the meantime.</p></div></div>';
     } else if (list.some((l) => l.verification_status === 'rejected')) {
       bannerEl.innerHTML = '<div class="banner banner-danger"><div><strong>Verification needs attention</strong><p class="text-sm">Your listing was rejected. Update your details and resubmit.</p></div></div>';

@@ -337,9 +337,18 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
 
       // Keep listings discoverable: if the owner typed an address but did not
       // drop a pin, resolve coordinates automatically so "near me" works.
-      if (patch.latitude == null && patch.longitude == null && (patch.address || shouldGeocode)) {
-        const address = patch.address || (await supa.from('laundromats').select('address').eq('id', laundromat_id).maybeSingle()).data?.address;
-        if (address) {
+      // Re-resolve when the address text changed too — otherwise the stored pin
+      // silently keeps pointing at the owner's *previous* address.
+      if (patch.latitude == null && patch.longitude == null) {
+        const { data: current } = await supa
+          .from('laundromats')
+          .select('address, latitude, longitude')
+          .eq('id', laundromat_id)
+          .maybeSingle();
+        const address = patch.address != null ? patch.address : (current && current.address);
+        const addressChanged = patch.address != null && patch.address !== (current && current.address);
+        const stalePin = !current || !validLatLng(current.latitude, current.longitude);
+        if (address && (shouldGeocode || addressChanged || stalePin)) {
           const loc = await geocode(address, { timeoutMs: 3500 });
           if (loc) {
             patch.latitude = loc.lat;
