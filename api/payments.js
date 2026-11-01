@@ -8,6 +8,7 @@ import { getSettings, num } from './_lib/settings.js';
 import { activeSubscription, activateSubscription, round2 } from './_lib/pricing.js';
 import { reconcilePayment } from './_lib/billing.js';
 import { isConfigured, createPaymentLink, getPaymentStatus } from './_lib/payfast.js';
+import { enforceRateLimit } from './_lib/ratelimit.js';
 
 function bookingReturnUrls(req, bookingId, paymentId) {
   const base = process.env.PUBLIC_APP_URL || process.env.APP_BASE_URL || 'https://laundromaster.re-el.co.za';
@@ -135,6 +136,9 @@ export default createHandler(async function handler(req, res) {
     if (action === 'create') {
       const parsed = paymentCreate.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      // Every attempt can open a gateway session, so cap how often one account
+      // can start checkout.
+      await enforceRateLimit(supa, req, 'payment-create', { limit: 30, windowSeconds: 3600, identifier: ctx.user.id });
       const { booking_id } = parsed.data;
       const { data: booking } = await supa.from('bookings')
         .select('id, customer_id, total_amount, currency, status')

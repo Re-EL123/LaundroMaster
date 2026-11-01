@@ -2,7 +2,7 @@
 
 ## Secrets (server-side only)
 `SUPABASE_SERVICE_ROLE_KEY`, `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`,
-`PAYFAST_PASSPHRASE`, `EMAIL_PROVIDER_API_KEY`,
+`PAYFAST_PASSPHRASE`, `RESEND_API_KEY`,
 `ADMIN_TOKEN`.
 Never expose these to the browser. Only `SUPABASE_URL` and `SUPABASE_ANON_KEY`
 are publishable, and only with RLS correctly configured.

@@ -1,5 +1,6 @@
 import { activateSubscription } from './pricing.js';
 import { notifyUser } from './push.js';
+import { money, appLink } from './email.js';
 
 const SUCCESS_STATES = new Set(['success', 'successful', 'succeeded', 'paid', 'complete', 'completed', '00']);
 const FAILURE_STATES = new Set(['failure', 'failed', 'declined', 'error', 'cancelled', 'canceled']);
@@ -122,7 +123,7 @@ export async function reconcilePayment(supa, payment, rawStatus) {
 
   if (payment.purpose === 'booking' && payment.booking_id) {
     const { data: booking } = await supa.from('bookings')
-      .select('id, customer_id, status, laundromats(name, owner_id)')
+      .select('id, customer_id, status, subtotal_amount, delivery_fee, discount_amount, total_amount, currency, scheduled_at, laundromats(name, owner_id), booking_items(service_name_snapshot, quantity, line_total)')
       .eq('id', payment.booking_id)
       .maybeSingle();
     if (booking && (booking.status === 'pending_payment' || booking.status === 'payment_failed')) {
@@ -135,6 +136,7 @@ export async function reconcilePayment(supa, payment, rawStatus) {
         status: 'pending_acceptance',
         reason: 'payment_received',
       });
+      const bizName = (booking.laundromats && booking.laundromats.name) || 'the laundromat';
       if (booking.laundromats && booking.laundromats.owner_id) {
         await notifyUser(supa, booking.laundromats.owner_id, {
           type: 'booking_paid',
@@ -143,8 +145,54 @@ export async function reconcilePayment(supa, payment, rawStatus) {
           url: 'apps/owner/pages/bookings.html',
         });
       }
+      if (booking.customer_id) {
+        await notifyUser(supa, booking.customer_id, {
+          type: 'booking_receipt',
+          title: 'Payment received — order placed',
+          body: `We received your payment for order ${String(booking.id).slice(0, 8)}. ${bizName} will confirm it shortly.`,
+          url: 'apps/customer/pages/orders.html',
+          email: receiptEmail(booking, bizName),
+        });
+      }
     }
     return updated;
   }
   return updated;
+}
+
+/** The customer's receipt/invoice, rendered once we know the order was paid. */
+function receiptEmail(booking, bizName) {
+  const currency = booking.currency || 'ZAR';
+  const reference = String(booking.id || '').slice(0, 8);
+  const total = money(booking.total_amount, currency);
+
+  const details = [
+    { label: 'Invoice', value: reference },
+    { label: 'Laundromat', value: bizName },
+  ];
+  if (booking.scheduled_at) {
+    details.push({ label: 'Scheduled', value: new Date(booking.scheduled_at).toUTCString() });
+  }
+  for (const item of booking.booking_items || []) {
+    details.push({
+      label: `${item.quantity} × ${item.service_name_snapshot}`,
+      value: money(item.line_total, currency),
+    });
+  }
+  if (Number(booking.delivery_fee) > 0) details.push({ label: 'Delivery', value: money(booking.delivery_fee, currency) });
+  if (Number(booking.discount_amount) > 0) details.push({ label: 'Discount', value: `-${money(booking.discount_amount, currency)}` });
+  details.push({ label: 'Total paid', value: total, emphasis: true });
+
+  return {
+    subject: `Your LaundroMaster order ${reference} is placed`,
+    preheader: `Payment of ${total} received.`,
+    heading: 'Payment received — order placed',
+    paragraphs: [
+      `Your payment of ${total} went through and your order was sent to ${bizName}.`,
+      'You will get another email as soon as they accept the order. This email is your receipt.',
+    ],
+    details,
+    ctaLabel: 'View your order',
+    ctaUrl: appLink('apps/customer/pages/orders.html'),
+  };
 }

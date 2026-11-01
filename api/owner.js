@@ -10,8 +10,9 @@ import {
 import { getSettings, num } from './_lib/settings.js';
 import { round2, activeSubscription, defaultPlan } from './_lib/pricing.js';
 import { reconcilePromotions } from './_lib/promotions.js';
-import { notifyUsers } from './_lib/push.js';
+import { notifyUsers, notifyUser } from './_lib/push.js';
 import { geocode, validLatLng } from './_lib/geo.js';
+import { money, appLink } from './_lib/email.js';
 
 const OWNER_ROLES = ['owner', 'admin', 'super_admin'];
 
@@ -504,6 +505,27 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
         notes: parsed.data.notes || null,
       }).select().single();
       if (error) return res.status(400).json(errorEnvelope(error));
+      await notifyUser(supa, ctx.user.id, {
+        type: 'payout_requested',
+        title: 'Payout requested',
+        body: 'We received your payout request. We will notify you as soon as it is processed.',
+        url: 'apps/owner/pages/payouts.html',
+        email: {
+          subject: `Payout request received — ${money(amount, data.currency)}`,
+          preheader: 'Your payout is queued for processing.',
+          heading: 'Payout request received',
+          paragraphs: [
+            'Thanks — your payout request is with us and will be reviewed shortly. Payouts are usually settled within a few business days.',
+          ],
+          details: [
+            { label: 'Amount', value: money(amount, data.currency), emphasis: true },
+            { label: 'Status', value: 'Requested' },
+            { label: 'Reference', value: String(data.id).slice(0, 8) },
+          ],
+          ctaLabel: 'Track your payouts',
+          ctaUrl: appLink('apps/owner/pages/payouts.html'),
+        },
+      });
       return res.status(201).json(successEnvelope(data));
     }
 
@@ -554,7 +576,6 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
       if (error) return res.status(400).json(errorEnvelope(error));
       if (pending) {
         const { data: biz } = await supa.from('laundromats').select('name').eq('id', laundromat_id).maybeSingle();
-        const { notifyUser } = await import('./_lib/push.js');
         await notifyUser(supa, profileId, {
           type: 'staff_invite',
           title: 'Team invitation',

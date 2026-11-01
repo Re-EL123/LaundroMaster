@@ -47,6 +47,9 @@ export function createHandler(fn) {
       return await fn(req, res);
     } catch (err) {
       const status = err && err.status ? err.status : 500;
+      // Internal faults lose their message in the response, so keep the detail
+      // in the platform logs where it can actually be investigated.
+      if (status >= 500) console.error(`[${requestId}]`, err);
       return res.status(status).json(errorEnvelope(err));
     }
   };

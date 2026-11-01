@@ -1,4 +1,7 @@
-import { login, register, me, homeForRole, getSession } from '../../../shared/js/auth-client.js';
+import {
+  login, register, me, homeForRole, getSession,
+  requestPasswordReset, resetPassword, consumeAuthRedirect, logout,
+} from '../../../shared/js/auth-client.js';
 import { register as registerServiceWorker, wireInstallButton } from '../../../shared/js/pwa.js';
 
 registerServiceWorker();
@@ -16,6 +19,8 @@ const tabLogin = document.getElementById('tabLogin');
 const tabRegister = document.getElementById('tabRegister');
 const loginForm = document.getElementById('loginForm');
 const registerForm = document.getElementById('registerForm');
+const forgotForm = document.getElementById('forgotForm');
+const resetForm = document.getElementById('resetForm');
 const tabs = document.querySelector('.portal-tabs');
 
 function nextTarget(role) {
@@ -26,15 +31,27 @@ function nextTarget(role) {
 
 function showTab(which) {
   const isLogin = which === 'login';
-  tabLogin.classList.toggle('is-active', isLogin);
-  tabRegister.classList.toggle('is-active', !isLogin);
-  tabLogin.setAttribute('aria-selected', String(isLogin));
-  tabRegister.setAttribute('aria-selected', String(!isLogin));
-  loginForm.hidden = !isLogin;
-  registerForm.hidden = isLogin;
-  tabs.dataset.active = which;
-  const focus = isLogin ? document.getElementById('loginEmail') : document.getElementById('regName');
-  focus.focus({ preventScroll: true });
+  const isRegister = which === 'register';
+  // Forgot/reset are reached from the sign-in form, so the tabs keep whatever
+  // state they were in rather than highlighting something that is not shown.
+  if (isLogin || isRegister) {
+    tabLogin.classList.toggle('is-active', isLogin);
+    tabRegister.classList.toggle('is-active', isRegister);
+    tabLogin.setAttribute('aria-selected', String(isLogin));
+    tabRegister.setAttribute('aria-selected', String(isRegister));
+    tabs.dataset.active = which;
+  }
+  for (const [name, form] of Object.entries({ login: loginForm, register: registerForm, forgot: forgotForm, reset: resetForm })) {
+    form.hidden = name !== which;
+  }
+  const focus = {
+    login: 'loginEmail',
+    register: 'regName',
+    forgot: 'forgotEmail',
+    reset: 'resetPassword',
+  }[which];
+  const field = focus && document.getElementById(focus);
+  if (field) field.focus({ preventScroll: true });
 }
 
 tabLogin.addEventListener('click', () => showTab('login'));
@@ -62,7 +79,7 @@ function setLoading(form, loading) {
   if (!btn) return;
   if (loading) {
     btn.dataset.label = btn.textContent;
-    btn.textContent = form.id === 'registerForm' ? 'Creating account…' : 'Signing in…';
+    btn.textContent = btn.dataset.loading || 'Working…';
   } else if (btn.dataset.label) {
     btn.textContent = btn.dataset.label;
   }
@@ -132,8 +149,76 @@ registerForm.addEventListener('submit', async (e) => {
   }
 });
 
-/* Already signed in? Go straight to the right app. */
+document.getElementById('forgotLink').addEventListener('click', () => {
+  document.getElementById('forgotEmail').value = loginForm.email.value.trim();
+  setMsg(document.getElementById('forgotMsg'), '');
+  showTab('forgot');
+});
+
+document.getElementById('forgotBack').addEventListener('click', () => showTab('login'));
+
+forgotForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('forgotMsg');
+  setMsg(msg, '');
+  setLoading(forgotForm, true);
+  try {
+    await requestPasswordReset(document.getElementById('forgotEmail').value.trim());
+    setLoading(forgotForm, false);
+    // Deliberately identical whether or not the address has an account.
+    setMsg(msg, 'If that email has an account, a reset link is on its way. Check your inbox and spam folder.', 'success');
+  } catch (err) {
+    setMsg(msg, friendly(err), 'error');
+    setLoading(forgotForm, false);
+  }
+});
+
+resetForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('resetMsg');
+  setMsg(msg, '');
+  const password = document.getElementById('resetPassword').value;
+  if (password !== document.getElementById('resetConfirm').value) {
+    setMsg(msg, 'Those passwords do not match.', 'error');
+    return;
+  }
+  setLoading(resetForm, true);
+  try {
+    await resetPassword(password);
+    // The recovery link signs the account in; end that session and make them
+    // prove the new password works.
+    await logout();
+    setLoading(resetForm, false);
+    resetForm.reset();
+    showTab('login');
+    setMsg(document.getElementById('loginMsg'), 'Password updated. Sign in with your new password.', 'success');
+  } catch (err) {
+    setMsg(msg, friendly(err), 'error');
+    setLoading(resetForm, false);
+  }
+});
+
+/* Emailed links (confirmation, recovery) land back here with the session in the
+   URL fragment. Confirmation signs straight in; recovery asks for a new password. */
 (async () => {
+  const redirect = consumeAuthRedirect();
+  if (redirect) {
+    if (redirect.error) {
+      showTab('login');
+      setMsg(document.getElementById('loginMsg'), friendly({ message: redirect.error }), 'error');
+      return;
+    }
+    if (redirect.type === 'recovery') { showTab('reset'); return; }
+    try {
+      const user = await me();
+      if (user && user.role) { location.href = nextTarget(user.role); return; }
+    } catch { /* fall through to the sign-in form */ }
+    showTab('login');
+    setMsg(document.getElementById('loginMsg'), 'Email confirmed. Sign in to continue.', 'success');
+    return;
+  }
+
+  /* Already signed in? Go straight to the right app. */
   if (!getSession()) return;
   try {
     const user = await me();

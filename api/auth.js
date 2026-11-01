@@ -7,6 +7,7 @@ import { getUser, requireUser, topRole, ROLE_PRIORITY } from './_lib/auth.js';
 import { z } from 'zod';
 import { profileUpdate, addressSave } from './_lib/validation.js';
 import { enforceRateLimit } from './_lib/ratelimit.js';
+import { sendBrandedEmail, emailConfigured, appLink } from './_lib/email.js';
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -20,6 +21,16 @@ const registerSchema = z.object({
   account_type: z.enum(['customer', 'owner']).default('customer'),
   ref: z.string().max(20).optional(),
 });
+
+const forgotPasswordSchema = z.object({ email: z.string().email() });
+
+const resetPasswordSchema = z.object({ password: z.string().min(8, 'Use at least 8 characters') });
+
+// Where Supabase sends people back to after they follow an emailed link.
+// Must be listed in Supabase → Authentication → URL Configuration → Redirect URLs.
+function portalRedirect() {
+  return appLink('apps/portal/index.html');
+}
 
 async function resolveRole(admin, userId) {
   if (!admin || !userId) return 'customer';
@@ -85,6 +96,39 @@ async function provisionUser(admin, user, { accountType = 'customer', fullName, 
   }
 }
 
+// Confirm a new account with a link we mail ourselves, so the message is
+// branded and not subject to Supabase's shared SMTP rate limits.
+async function sendConfirmationEmail(admin, { email, password, full_name, account_type, ref }) {
+  try {
+    const { data, error } = await admin.auth.admin.generateLink({
+      type: 'signup',
+      email,
+      password,
+      options: {
+        data: { full_name, account_type, ref: ref || null },
+        redirectTo: portalRedirect(),
+      },
+    });
+    const link = data && data.properties && data.properties.action_link;
+    if (error || !link) return { ok: false, created: false, error };
+
+    const result = await sendBrandedEmail(email, {
+      subject: 'Confirm your LaundroMaster email',
+      preheader: 'One tap and your account is ready.',
+      heading: full_name ? `Welcome, ${full_name}` : 'Welcome to LaundroMaster',
+      paragraphs: [
+        'Confirm this email address to activate your LaundroMaster account.',
+        'This link expires in 24 hours. If you did not create an account, you can safely ignore this email.',
+      ],
+      ctaLabel: 'Confirm my email',
+      ctaUrl: link,
+    });
+    return { ok: Boolean(result.sent), created: true, user: data.user || null, error: result.error };
+  } catch (err) {
+    return { ok: false, created: false, error: err };
+  }
+}
+
 export default createHandler(async function handler(req, res) {
   const q = query(req);
   const action = q.action || '';
@@ -126,6 +170,33 @@ export default createHandler(async function handler(req, res) {
       const { email, password, full_name, account_type, ref } = parsed.data;
       await enforceRateLimit(admin, req, 'register-ip', { limit: 10, windowSeconds: 3600 });
       await enforceRateLimit(admin, req, 'register-email', { limit: 3, windowSeconds: 3600, identifier: email.toLowerCase() });
+
+      // With a mail provider configured we create the account and send the
+      // confirmation link ourselves: branded, and not queued behind Supabase's
+      // shared SMTP.
+      if (emailConfigured()) {
+        const sent = await sendConfirmationEmail(admin, { email, password, full_name, account_type, ref });
+        if (sent.ok) {
+          return res.status(201).json(successEnvelope({
+            user: sent.user ? { id: sent.user.id, email: sent.user.email } : null,
+            session: null,
+            role: account_type,
+            email_confirmation_required: true,
+          }));
+        }
+        // The account exists but the mail did not go out. Falling through to
+        // signUp() would silently do nothing for an existing user, so say so.
+        if (sent.created) {
+          return res.status(502).json(errorEnvelope(new ApiError(
+            'EMAIL_SEND_FAILED',
+            'Your account was created but the confirmation email could not be sent. Use "Forgot password" to request a new link.',
+            502,
+          )));
+        }
+        // generateLink refused (typically "already registered"): let the normal
+        // sign-up path answer, which does not reveal whether the account exists.
+      }
+
       const { data, error } = await anon.auth.signUp({
         email,
         password,
@@ -146,6 +217,71 @@ export default createHandler(async function handler(req, res) {
         role,
         email_confirmation_required: !data.session,
       }));
+    }
+
+    if (action === 'forgot-password') {
+      const parsed = forgotPasswordSchema.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const email = parsed.data.email;
+      await enforceRateLimit(admin, req, 'forgot-ip', { limit: 10, windowSeconds: 3600 });
+      await enforceRateLimit(admin, req, 'forgot-email', { limit: 3, windowSeconds: 3600, identifier: email.toLowerCase() });
+
+      // Always answer identically so this endpoint cannot be used to discover
+      // which addresses have accounts.
+      const done = () => res.status(200).json(successEnvelope({ sent: true }));
+
+      if (!emailConfigured()) {
+        // No mail provider yet: let Supabase send its own recovery email.
+        try { await anon.auth.resetPasswordForEmail(email, { redirectTo: portalRedirect() }); } catch { /* stay silent */ }
+        return done();
+      }
+
+      try {
+        const { data, error } = await admin.auth.admin.generateLink({
+          type: 'recovery',
+          email,
+          options: { redirectTo: portalRedirect() },
+        });
+        const link = data && data.properties && data.properties.action_link;
+        if (!error && link) {
+          await sendBrandedEmail(email, {
+            subject: 'Reset your LaundroMaster password',
+            preheader: 'Choose a new password — the link expires shortly.',
+            heading: 'Reset your password',
+            paragraphs: [
+              'We received a request to reset the password for your LaundroMaster account.',
+              'This link can only be used once and expires in 60 minutes. If you did not ask for a reset, you can ignore this email — your password stays unchanged.',
+            ],
+            ctaLabel: 'Choose a new password',
+            ctaUrl: link,
+          });
+        }
+      } catch { /* never reveal whether the address exists */ }
+      return done();
+    }
+
+    if (action === 'reset-password') {
+      const ctx = await requireUser(req);
+      const parsed = resetPasswordSchema.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const { error } = await admin.auth.admin.updateUserById(ctx.user.id, { password: parsed.data.password });
+      if (error) return res.status(400).json(errorEnvelope(new ApiError('PASSWORD_UPDATE_FAILED', error.message)));
+      if (ctx.user.email) {
+        try {
+          await sendBrandedEmail(ctx.user.email, {
+            subject: 'Your LaundroMaster password was changed',
+            preheader: 'If this was not you, reset it again immediately.',
+            heading: 'Your password was changed',
+            paragraphs: [
+              'The password for your LaundroMaster account was just changed.',
+              'If this was not you, reset your password immediately from the sign-in page.',
+            ],
+            ctaLabel: 'Go to sign in',
+            ctaUrl: portalRedirect(),
+          });
+        } catch { /* the password did change; the notice is a nicety */ }
+      }
+      return res.status(200).json(successEnvelope({ ok: true }));
     }
 
     if (action === 'logout') {

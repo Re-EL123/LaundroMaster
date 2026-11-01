@@ -107,6 +107,52 @@ export async function logout() {
   clearSession();
 }
 
+export async function requestPasswordReset(email) {
+  const { ok, status, data } = await raw('/auth?action=forgot-password', { method: 'POST', body: { email } });
+  if (!ok) throw new Error((data && data.error && data.error.message) || `Request failed (${status})`);
+  return true;
+}
+
+export async function resetPassword(password) {
+  const s = getSession();
+  const { ok, status, data } = await raw('/auth?action=reset-password', {
+    method: 'POST',
+    body: { password },
+    token: s && s.access_token,
+  });
+  if (!ok) throw new Error((data && data.error && data.error.message) || `Reset failed (${status})`);
+  return true;
+}
+
+/**
+ * Supabase sends emailed links back with the session in the URL fragment.
+ * Capture it so the portal can either finish signing the person in (email
+ * confirmation) or let them choose a new password (recovery).
+ *
+ * The fragment is stripped immediately: those tokens are single-use and must
+ * not survive a refresh or a share.
+ */
+export function consumeAuthRedirect() {
+  const hash = String((typeof location !== 'undefined' && location.hash) || '').replace(/^#/, '');
+  if (!hash) return null;
+  const params = new URLSearchParams(hash);
+  const accessToken = params.get('access_token');
+  const failure = params.get('error_description') || params.get('error');
+  if (!accessToken && !failure) return null;
+
+  history.replaceState(null, '', location.pathname + location.search);
+  if (failure) return { error: failure.replace(/\+/g, ' ') };
+
+  const session = {
+    access_token: accessToken,
+    refresh_token: params.get('refresh_token') || null,
+    user: null,
+    role: null,
+  };
+  setSession(session);
+  return { type: params.get('type') || '', session };
+}
+
 // Single-flight session refresh shared by the API client and me() so concurrent
 // 401s never trigger two refresh calls with the same (rotating) refresh token.
 let refreshPromise = null;

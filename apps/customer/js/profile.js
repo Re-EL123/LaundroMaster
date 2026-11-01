@@ -71,7 +71,11 @@ form.addEventListener('submit', async (e) => {  e.preventDefault();
   }
 });
 
-document.getElementById('signOutBtn').addEventListener('click', async () => {
+// The header (shared/js/chrome.js) already owns `#signOutBtn`, so the aside
+// button needs its own id — otherwise getElementById finds the header one and
+// this listener never runs.
+document.getElementById('accountSignOutBtn')?.addEventListener('click', async (e) => {
+  e.currentTarget.disabled = true;
   await logout();
   location.href = portalUrl();
 });

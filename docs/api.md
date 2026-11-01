@@ -8,7 +8,7 @@ Authentication uses `Authorization: Bearer <access_token>` obtained from
 
 | # | Endpoint | Methods | Actions / Notes |
 |---|----------|---------|-----------------|
-| 1 | `/api/auth` | GET, POST | `login`, `register`, `logout`, `refresh`, `update-profile` (Auth), `me` (Auth, GET) |
+| 1 | `/api/auth` | GET, POST | `login`, `register`, `logout`, `refresh`, `forgot-password`, `reset-password` (Auth), `update-profile` (Auth), `me` (Auth, GET) |
 | 2 | `/api/laundromats` | GET, POST | list (`?q=&limit=&offset=`), `?id=`, `?action=services&id=`, `?action=favorites` (Auth), `?action=ads` (active ads, `?placement=`), `?action=favorite` (Auth, POST toggles), `?action=ad-click\|ad-impression` (POST counters) |
 | 3 | `/api/bookings` | GET, POST | list (scoped by role), `?id=`, `?action=quote` (Auth, price preview), `?action=create` (Auth), `?action=update-status` (Owner), `?action=cancel` (Auth), `?action=request-refund` (Auth), `?action=redeem-points` (Auth) |
 | 4 | `/api/payments` | GET, POST | `?booking_id=`/`?id=` (Auth), `?action=payment&id=` (Auth); `?action=plans&audience=` (Auth), `?action=subscription&audience=` (Auth), `?action=savings` (Auth); POST `?action=create` (Auth, `booking_id`) → hosted PayFast checkout, `?action=subscribe` (Auth, `plan_id`), `?action=verify` (Auth, `payment_id`), `?action=cancel-subscription` (Auth, `audience`) |

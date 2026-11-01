@@ -79,7 +79,8 @@
           </div>
         </div>
 
-        <button class="btn btn-primary portal-submit" type="submit" id="loginBtn">Sign in</button>
+        <button class="btn btn-primary portal-submit" type="submit" id="loginBtn" data-loading="Signing in…">Sign in</button>
+        <p class="portal-aside"><button type="button" class="portal-link" id="forgotLink">Forgot your password?</button></p>
         <p class="form-msg" id="loginMsg" role="status" aria-live="polite"></p>
       </form>
 
@@ -127,8 +128,51 @@
           </div>
         </div>
 
-        <button class="btn btn-primary portal-submit" type="submit" id="registerBtn">Create account</button>
+        <button class="btn btn-primary portal-submit" type="submit" id="registerBtn" data-loading="Creating account…">Create account</button>
         <p class="form-msg" id="registerMsg" role="status" aria-live="polite"></p>
+      </form>
+
+      <form id="forgotForm" class="portal-form" hidden novalidate>
+        <h2 class="portal-form-title">Forgot your password?</h2>
+        <p class="portal-form-sub">Enter your email and we will send you a reset link.</p>
+
+        <div class="field">
+          <label class="label" for="forgotEmail">Email</label>
+          <input class="input" id="forgotEmail" name="email" type="email" inputmode="email"
+                 autocomplete="email" placeholder="you@example.com" required>
+        </div>
+
+        <button class="btn btn-primary portal-submit" type="submit" id="forgotBtn" data-loading="Sending…">Send reset link</button>
+        <p class="portal-aside"><button type="button" class="portal-link" id="forgotBack">Back to sign in</button></p>
+        <p class="form-msg" id="forgotMsg" role="status" aria-live="polite"></p>
+      </form>
+
+      <form id="resetForm" class="portal-form" hidden novalidate>
+        <h2 class="portal-form-title">Choose a new password</h2>
+        <p class="portal-form-sub">You are signed in with a reset link. Pick something new.</p>
+
+        <div class="field">
+          <label class="label" for="resetPassword">New password</label>
+          <div class="password-field">
+            <input class="input" id="resetPassword" name="password" type="password"
+                   autocomplete="new-password" placeholder="At least 8 characters" required minlength="8">
+            <button class="password-toggle" type="button" data-toggle="resetPassword"
+                    aria-label="Show password" aria-pressed="false">
+              <svg class="icon-eye" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M12 5c-5 0-9 5-9 7s4 7 9 7 9-5 9-7-4-7-9-7z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              <svg class="icon-eye-off" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M12 5c-5 0-9 5-9 7s4 7 9 7 9-5 9-7-4-7-9-7z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 4l16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <span class="help">Use at least 8 characters.</span>
+        </div>
+
+        <div class="field">
+          <label class="label" for="resetConfirm">Confirm new password</label>
+          <input class="input" id="resetConfirm" name="confirm" type="password"
+                 autocomplete="new-password" placeholder="Repeat your password" required minlength="8">
+        </div>
+
+        <button class="btn btn-primary portal-submit" type="submit" id="resetBtn" data-loading="Saving…">Save new password</button>
+        <p class="form-msg" id="resetMsg" role="status" aria-live="polite"></p>
       </form>
 
       <p class="portal-foot">

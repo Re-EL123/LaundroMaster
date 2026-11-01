@@ -6,11 +6,18 @@ export class ApiError extends Error {
   }
 }
 
+// ApiError messages are written for people. Anything else that reaches here is a
+// database or driver fault whose text describes our schema, so it is replaced
+// with a generic message and reported as INTERNAL.
 export function errorEnvelope(err) {
+  const internal = !(err instanceof ApiError);
   return {
     ok: false,
     data: null,
-    error: { code: err.code || 'INTERNAL', message: err.message || 'Error' },
+    error: {
+      code: internal ? 'INTERNAL' : (err.code || 'ERROR'),
+      message: internal ? 'Something went wrong on our side. Please try again.' : err.message,
+    },
     meta: { requestId: 'req' },
   };
 }

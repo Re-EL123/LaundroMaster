@@ -15,7 +15,9 @@ PAYFAST_MERCHANT_KEY=
 PAYFAST_PASSPHRASE=          # optional; used for signed ITN + checkout
 PAYFAST_MODE=test            # test | live
 PAYFAST_BASE_URL=https://www.payfast.co.za
-EMAIL_PROVIDER_API_KEY=
+# Resend (https://resend.com/api-keys)
+RESEND_API_KEY=
+EMAIL_FROM=LaundroMaster <no-reply@laundromaster.re-el.co.za>
 APP_BASE_URL=https://laundromaster.re-el.co.za
 PUBLIC_APP_URL=https://laundromaster.re-el.co.za
 API_PUBLIC_URL=https://laundromaster-sable.vercel.app
@@ -66,8 +68,13 @@ redirects to `apps/portal/index.html`. Each app reads its API base from
    look for it. Without the schema, API routes return `code:"PGRST205"`.
 2. Create storage buckets: `avatars`, `laundromat-media`, `verification-documents`,
    `booking-attachments`, `receipts`, `platform-assets`.
-3. Configure the email provider and PayFast sandbox credentials, then point the
-   PayFast `notify_url` at `https://<api-host>/api/webhooks`.
+3. Configure Resend (verify the sending domain, then set `RESEND_API_KEY` and
+   `EMAIL_FROM`) and the PayFast sandbox credentials, then point the PayFast
+   `notify_url` at `https://<api-host>/api/webhooks`. In Supabase, add
+   `<PUBLIC_APP_URL>/apps/portal/index.html` to Authentication -> URL
+   Configuration -> Redirect URLs so confirmation and password-reset links
+   resolve. With Resend configured the API sends its own branded auth emails
+   (via `generateLink`); without it, auth falls back to Supabase's SMTP.
 4. Set the env vars above on Vercel and deploy.
 5. Update `apps/*/js/config.js` with the Vercel API base; push (Pages redeploys).
 6. Verify HTTPS, CORS, auth callback URLs, and the webhook endpoint.

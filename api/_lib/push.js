@@ -1,4 +1,5 @@
 import webpush from 'web-push';
+import { sendNotificationEmail } from './email.js';
 
 let configured = null;
 
@@ -53,8 +54,10 @@ export async function sendPushToUser(supa, userId, payload) {
   return sent;
 }
 
-// Inserts an in-app notification row and fires a Web Push message.
-export async function notifyUser(supa, userId, { type = 'info', title, body = null, url = null, push = true } = {}) {
+// Inserts an in-app notification row and fires a Web Push message. Transactional
+// notifications are also emailed (see ./email.js); pass `email: false` to keep a
+// notification in-app only, or an object to override the email copy.
+export async function notifyUser(supa, userId, { type = 'info', title, body = null, url = null, push = true, email } = {}) {
   if (!userId || !title) return null;
   const { data } = await supa
     .from('notifications')
@@ -64,6 +67,9 @@ export async function notifyUser(supa, userId, { type = 'info', title, body = nu
   if (push) {
     await sendPushToUser(supa, userId, { title, body: body || '', url: url || '', tag: type, type });
   }
+  try {
+    await sendNotificationEmail(supa, userId, { type, title, body, url, email });
+  } catch { /* email is best effort and must never fail the caller */ }
   return data || null;
 }
 

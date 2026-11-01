@@ -12,6 +12,7 @@ import { getSettings, setSettings, num } from './_lib/settings.js';
 import { round2 } from './_lib/pricing.js';
 import { reverseCompletionLedger } from './_lib/pricing.js';
 import { notifyUser, notifyUsers } from './_lib/push.js';
+import { money, appLink } from './_lib/email.js';
 import { reconcilePromotions } from './_lib/promotions.js';
 import { geocode, validLatLng } from './_lib/geo.js';
 
@@ -25,6 +26,41 @@ async function logAdmin(supa, ctx, action, targetType, targetId, detail) {
       detail: detail || null,
     });
   } catch { /* auditing is best-effort */ }
+}
+
+const PAYOUT_STATUS_COPY = {
+  requested: ['Payout queued', 'Your payout request is back in the queue for review.'],
+  processing: ['Payout processing', 'Your payout is being processed and will land in your account shortly.'],
+  paid: ['Payout paid', 'Your payout has been paid out. This email is your payout statement.'],
+  rejected: ['Payout declined', 'Your payout request was declined.'],
+};
+
+// Tell an owner what happened to their money, with the amounts they need to
+// reconcile it against their bank statement.
+async function notifyPayoutStatus(supa, payout, { reference = null, notes = null } = {}) {
+  const [title, body] = PAYOUT_STATUS_COPY[payout.status] || ['Payout updated', `Your payout is now ${payout.status}.`];
+  try {
+    await notifyUser(supa, payout.owner_id, {
+      type: `payout_${payout.status}`,
+      title,
+      body,
+      url: 'apps/owner/pages/payouts.html',
+      email: {
+        subject: `${title} — ${money(payout.amount, payout.currency)}`,
+        preheader: body,
+        heading: title,
+        paragraphs: [body],
+        details: [
+          { label: 'Amount', value: money(payout.amount, payout.currency), emphasis: true },
+          { label: 'Status', value: String(payout.status || '').replace(/^\w/, (c) => c.toUpperCase()) },
+          { label: 'Reference', value: reference || String(payout.id).slice(0, 8) },
+          ...(notes ? [{ label: 'Note', value: notes }] : []),
+        ],
+        ctaLabel: 'View your payouts',
+        ctaUrl: appLink('apps/owner/pages/payouts.html'),
+      },
+    });
+  } catch { /* the payout status change is the important part */ }
 }
 
 export default createHandler(async function handler(req, res) {
@@ -444,6 +480,7 @@ export default createHandler(async function handler(req, res) {
         .eq('id', payout_id).select().single();
       if (error) return res.status(400).json(errorEnvelope(error));
       await logAdmin(supa, ctx, `payout.${status}`, 'payout', payout_id, { reference, notes });
+      if (data && data.owner_id) await notifyPayoutStatus(supa, data, { reference, notes });
       return res.status(200).json(successEnvelope(data));
     }
 
