@@ -60,6 +60,17 @@ export async function currentPositionIfPermitted(options = {}) {
   }
 }
 
+/**
+ * A GPS-grade fix, for a position that will be *stored* (a business pin) or that
+ * decides which laundromats a customer is shown. The browser's default reading
+ * is often an uncached-free network/IP estimate that can land in a different
+ * town, so ask for high accuracy and refuse to reuse a cached fix — a GPS lock
+ * usually takes a few seconds, hence the longer default timeout.
+ */
+export function precisePosition({ timeout = 25000 } = {}) {
+  return currentPosition({ enableHighAccuracy: true, timeout, maximumAge: 0 });
+}
+
 export function distanceKm(a, b) {
   if (!a || !b) return null;
   const toRad = (deg) => (deg * Math.PI) / 180;

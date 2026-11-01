@@ -4,7 +4,7 @@ import { mountCustomerHeader } from '../../../shared/js/chrome.js';
 import { laundromatCard } from './components.js';
 import { param, escapeHtml } from '../../../shared/js/format.js';
 import { renderAds } from '../../../shared/js/ads.js';
-import { currentPosition, currentPositionIfPermitted, permissionState } from '../../../shared/js/geolocation.js';
+import { precisePosition, currentPositionIfPermitted, permissionState } from '../../../shared/js/geolocation.js';
 import { attachPlaceAutocomplete } from '../../../shared/js/places.js';
 
 mountCustomerHeader('discover');
@@ -334,7 +334,7 @@ async function locateAndSearch({ interactive = false } = {}) {
   includeFar = false;
   showAll = false;
   try {
-    const pos = await currentPosition({ timeout: 9000 });
+    const pos = await precisePosition();
     await geoSearch({ lat: pos.lat, lng: pos.lng });
   } catch (err) {
     // No browser location: try the address saved on the customer's profile.
