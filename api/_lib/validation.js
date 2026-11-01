@@ -22,7 +22,7 @@ export const bookingUpdateStatus = z.object({
   status: z.enum([
     'pending_payment', 'pending_acceptance', 'accepted', 'pickup_scheduled', 'collected',
     'washing', 'drying', 'ironing', 'ready', 'out_for_delivery', 'completed',
-    'cancelled', 'rejected', 'payment_failed', 'refund_pending',
+    'cancelled', 'rejected', 'payment_failed', 'refund_pending', 'refunded',
   ]),
   reason: z.string().max(500).optional(),
 });
@@ -72,6 +72,9 @@ export const ownerLaundromatUpdate = z.object({
   phone: z.string().max(30).optional().nullable(),
   logo_path: z.string().max(500).optional().nullable(),
   photos: z.array(z.string().max(500)).max(12).optional(),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
+  geocode: z.boolean().optional(),
 });
 
 export const profileUpdate = z.object({
@@ -156,6 +159,9 @@ export const adminLaundromatUpdate = z.object({
   featured_until: z.string().datetime().optional().nullable(),
   name: z.string().min(2).max(160).optional(),
   address: z.string().max(300).optional().nullable(),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
+  geocode: z.boolean().optional(),
 });
 
 export const adminPayoutUpdate = z.object({
@@ -222,7 +228,7 @@ export const staffInvite = z.object({
   full_name: z.string().min(2).optional(),
   email: z.string().email(),
   phone: z.string().optional(),
-  password: z.string().min(6),
+  password: z.string().min(8, 'Use at least 8 characters').optional(),
   member_role: z.enum(['manager', 'staff']).default('staff'),
 });
 

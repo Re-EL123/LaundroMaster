@@ -4,12 +4,14 @@ import { adminClient } from './_lib/supabase-admin.js';
 import { query, body } from './_lib/req.js';
 import { requireUser, requireRoles, isAdmin, isOwner } from './_lib/auth.js';
 import { bookingCreate, bookingUpdateStatus, bookingAssignStaff, bookingMessage, bookingNote, redeemPoints } from './_lib/validation.js';
-import { getSettings } from './_lib/settings.js';
 import {
-  ownerCommissionPercent, isCustomerSubscriber, computeDeliveryFee,
+  ownerCommissionPercent, isCustomerSubscriber, computeDeliveryBreakdown,
   computeCharges, recordCompletionLedger, reverseCompletionLedger,
 } from './_lib/pricing.js';
 import { notifyUser } from './_lib/push.js';
+import { assertFeature } from './_lib/guard.js';
+import { geocode, haversineKm, validLatLng, addressQuery } from './_lib/geo.js';
+import { isOpenAt, resolveDeliveryZone } from './_lib/availability.js';
 
 const CANCELLABLE = ['pending_payment', 'pending_acceptance'];
 const REFUNDABLE = ['completed', 'cancelled', 'rejected', 'payment_failed'];
@@ -30,7 +32,8 @@ const TRANSITIONS = {
   ready: ['out_for_delivery', 'completed', 'cancelled'],
   out_for_delivery: ['completed', 'cancelled'],
   completed: ['refund_pending'],
-  refund_pending: ['completed'],
+  refund_pending: ['completed', 'refunded'],
+  refunded: [],
 };
 
 const STATUS_LABEL = {
@@ -49,6 +52,7 @@ const STATUS_LABEL = {
   rejected: 'Rejected',
   payment_failed: 'Payment failed',
   refund_pending: 'Refund requested',
+  refunded: 'Refunded',
 };
 
 async function ownedLaundromatIds(supa, userId) {
@@ -123,6 +127,97 @@ export default createHandler(async function handler(req, res) {
   const action = q.action || '';
   const supa = adminClient();
   if (!supa) return res.status(503).json(errorEnvelope(new ApiError('NOT_CONFIGURED', 'Supabase not configured', 503)));
+
+  // Shared pricing path for both the quote preview and booking creation so the
+  // customer never sees a total that differs from what is charged.
+  async function buildQuote(biz, input, customerId, settings) {
+    const serviceIds = [...new Set(input.items.map((i) => i.service_id))];
+    const { data: services, error: svcErr } = await supa
+      .from('services')
+      .select('id, name, base_price, is_active, laundromat_id')
+      .in('id', serviceIds);
+    if (svcErr) throw svcErr;
+
+    const byId = new Map((services || []).map((s) => [s.id, s]));
+    const items = [];
+    let subtotal = 0;
+    for (const line of input.items) {
+      const svc = byId.get(line.service_id);
+      if (!svc || svc.laundromat_id !== input.laundromat_id || !svc.is_active) {
+        throw new ApiError('INVALID_SERVICE', `Service ${line.service_id} is unavailable`);
+      }
+      const unit = Number(svc.base_price) || 0;
+      const lineTotal = unit * line.quantity;
+      subtotal += lineTotal;
+      items.push({
+        service_id: svc.id,
+        service_name_snapshot: svc.name,
+        unit_price_snapshot: unit,
+        quantity: line.quantity,
+        line_total: lineTotal,
+      });
+    }
+
+    // Distance + delivery zone (only when the customer asked for collection).
+    let distanceKm = null;
+    let zoneInfo = { zone: null, fee: null, outOfArea: false, hasZones: false };
+    const address = input.delivery_address || input.pickup_address;
+    if ((input.delivery_required || input.pickup_required) && address && validLatLng(biz.latitude, biz.longitude)) {
+      const loc = await geocode(addressQuery(address), { timeoutMs: 2500 });
+      if (loc) {
+        distanceKm = Number(haversineKm(Number(biz.latitude), Number(biz.longitude), loc.lat, loc.lng).toFixed(2));
+        const { data: zones } = await supa.from('delivery_zones')
+          .select('*').eq('laundromat_id', biz.id);
+        zoneInfo = resolveDeliveryZone(zones || [], distanceKm);
+      }
+    }
+
+    const customerPlan = await isCustomerSubscriber(supa, customerId);
+    const delivery = computeDeliveryBreakdown(settings, {
+      deliveryRequired: input.delivery_required,
+      pickupRequired: input.pickup_required,
+      hasCustomerPlan: customerPlan,
+      extraFee: biz.extra_delivery_fee,
+      zoneFee: zoneInfo.fee,
+    });
+    const commissionPercent = await ownerCommissionPercent(supa, biz.owner_id, settings);
+    const tax = 0;
+    const discount = 0;
+    const charges = computeCharges({
+      subtotal,
+      deliveryFee: delivery.total,
+      platformDeliveryFee: delivery.platform,
+      ownerDeliveryFee: delivery.owner,
+      tax,
+      discount,
+      commissionPercent,
+    });
+    return {
+      items,
+      subtotal: charges.subtotal,
+      delivery_fee: delivery.total,
+      platform_fee: charges.platformFee,
+      owner_net: charges.ownerNet,
+      commission: charges.commission,
+      tax,
+      discount,
+      total: charges.total,
+      currency: settings.currency || 'ZAR',
+      zone: zoneInfo.zone ? { id: zoneInfo.zone.id, name: zoneInfo.zone.name, fee: zoneInfo.fee } : null,
+      distance_km: distanceKm,
+      out_of_area: zoneInfo.outOfArea,
+      has_delivery_zones: zoneInfo.hasZones,
+      has_plan: customerPlan,
+    };
+  }
+
+  async function scheduledHoursError(laundromatId, scheduledAt) {
+    if (!scheduledAt) return null;
+    const { data: hours } = await supa.from('operating_hours')
+      .select('*').eq('laundromat_id', laundromatId);
+    const state = isOpenAt(hours || [], scheduledAt);
+    return state.open ? null : state.reason || 'The laundromat is closed at that time.';
+  }
 
   if (req.method === 'GET') {
     const ctx = await requireUser(req);
@@ -204,13 +299,39 @@ export default createHandler(async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
+    if (action === 'quote') {
+      const ctx = await requireUser(req);
+      const parsed = bookingCreate.safeParse(body(req));
+      if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
+      const input = parsed.data;
+      const settings = await assertFeature(supa, ctx, null);
+      const { data: biz } = await supa.from('laundromats')
+        .select('id, owner_id, verification_status, accepting_orders, max_orders_per_day, extra_delivery_fee, latitude, longitude')
+        .eq('id', input.laundromat_id).maybeSingle();
+      if (!biz || (biz.verification_status !== 'approved' && !isAdmin(ctx))) {
+        return res.status(400).json(errorEnvelope(new ApiError('INVALID_LAUNDROMAT', 'Laundromat is not available for booking')));
+      }
+      if (biz.accepting_orders === false && !isAdmin(ctx)) {
+        return res.status(400).json(errorEnvelope(new ApiError('NOT_ACCEPTING', 'This laundromat is not accepting new orders right now')));
+      }
+      const customerId = isAdmin(ctx) && input.customer_id ? input.customer_id : ctx.user.id;
+      try {
+        const quote = await buildQuote(biz, input, customerId, settings);
+        const hoursError = await scheduledHoursError(input.laundromat_id, input.scheduled_at);
+        return res.status(200).json(successEnvelope({ ...quote, hours_error: hoursError }));
+      } catch (err) {
+        return res.status(err.status || 400).json(errorEnvelope(err));
+      }
+    }
+
     if (action === 'create') {
       const ctx = await requireUser(req);
       const parsed = bookingCreate.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
       const input = parsed.data;
+      const settings = await assertFeature(supa, ctx, null);
 
-      const { data: biz } = await supa.from('laundromats').select('id, owner_id, verification_status, accepting_orders, max_orders_per_day, extra_delivery_fee').eq('id', input.laundromat_id).maybeSingle();
+      const { data: biz } = await supa.from('laundromats').select('id, owner_id, verification_status, accepting_orders, max_orders_per_day, extra_delivery_fee, latitude, longitude').eq('id', input.laundromat_id).maybeSingle();
       if (!biz || (biz.verification_status !== 'approved' && !isAdmin(ctx))) {
         return res.status(400).json(errorEnvelope(new ApiError('INVALID_LAUNDROMAT', 'Laundromat is not available for booking')));
       }
@@ -218,58 +339,41 @@ export default createHandler(async function handler(req, res) {
         return res.status(400).json(errorEnvelope(new ApiError('NOT_ACCEPTING', 'This laundromat is not accepting new orders right now')));
       }
       if (biz.max_orders_per_day) {
-        const start = new Date(); start.setHours(0, 0, 0, 0);
+        // Count from midnight in South Africa (UTC+2), not the server's timezone.
+        const now = Date.now();
+        const sast = new Date(now + 2 * 60 * 60 * 1000);
+        const startOfDaySast = Date.UTC(
+          sast.getUTCFullYear(), sast.getUTCMonth(), sast.getUTCDate(),
+        ) - 2 * 60 * 60 * 1000;
         const { count } = await supa.from('bookings')
           .select('*', { count: 'exact', head: true })
           .eq('laundromat_id', input.laundromat_id)
-          .gte('created_at', start.toISOString())
+          .gte('created_at', new Date(startOfDaySast).toISOString())
           .in('status', ['pending_payment', 'pending_acceptance', 'accepted', 'pickup_scheduled', 'collected', 'washing', 'drying', 'ironing', 'ready', 'out_for_delivery']);
         if ((count || 0) >= biz.max_orders_per_day) {
           return res.status(400).json(errorEnvelope(new ApiError('AT_CAPACITY', 'This laundromat has reached its daily order limit')));
         }
       }
 
-      const serviceIds = [...new Set(input.items.map((i) => i.service_id))];
-      const { data: services, error: svcErr } = await supa
-        .from('services')
-        .select('id, name, base_price, is_active, laundromat_id')
-        .in('id', serviceIds);
-      if (svcErr) return res.status(400).json(errorEnvelope(svcErr));
+      const hoursError = await scheduledHoursError(input.laundromat_id, input.scheduled_at);
+      if (hoursError) {
+        return res.status(400).json(errorEnvelope(new ApiError('OUTSIDE_HOURS', hoursError)));
+      }
 
-      const byId = new Map((services || []).map((s) => [s.id, s]));
-      const items = [];
-      let subtotal = 0;
-      for (const line of input.items) {
-        const svc = byId.get(line.service_id);
-        if (!svc || svc.laundromat_id !== input.laundromat_id || !svc.is_active) {
-          return res.status(400).json(errorEnvelope(new ApiError('INVALID_SERVICE', `Service ${line.service_id} is unavailable`)));
-        }
-        const unit = Number(svc.base_price) || 0;
-        const lineTotal = unit * line.quantity;
-        subtotal += lineTotal;
-        items.push({
-          service_id: svc.id,
-          service_name_snapshot: svc.name,
-          unit_price_snapshot: unit,
-          quantity: line.quantity,
-          line_total: lineTotal,
-        });
+      let quote;
+      try {
+        quote = await buildQuote(biz, input, isAdmin(ctx) && input.customer_id ? input.customer_id : ctx.user.id, settings);
+      } catch (err) {
+        return res.status(err.status || 400).json(errorEnvelope(err));
+      }
+      if (quote.out_of_area) {
+        return res.status(400).json(errorEnvelope(new ApiError(
+          'OUT_OF_AREA',
+          'That address is outside this laundromat\'s delivery area. Choose another laundromat or arrange drop-off.',
+        )));
       }
 
       const customerId = isAdmin(ctx) && input.customer_id ? input.customer_id : ctx.user.id;
-
-      const settings = await getSettings(supa);
-      const commissionPercent = await ownerCommissionPercent(supa, biz.owner_id, settings);
-      const hasCustomerPlan = await isCustomerSubscriber(supa, customerId);
-      const deliveryFee = computeDeliveryFee(settings, {
-        deliveryRequired: input.delivery_required,
-        pickupRequired: input.pickup_required,
-        hasCustomerPlan,
-        extraFee: biz.extra_delivery_fee,
-      });
-      const tax = 0;
-      const discount = 0;
-      const charges = computeCharges({ subtotal, deliveryFee, tax, discount, commissionPercent });
 
       const { data: booking, error: bookingErr } = await supa
         .from('bookings')
@@ -277,15 +381,15 @@ export default createHandler(async function handler(req, res) {
           customer_id: customerId,
           laundromat_id: input.laundromat_id,
           status: 'pending_payment',
-          currency: settings.currency || 'ZAR',
-          subtotal_amount: charges.subtotal,
-          delivery_fee: deliveryFee,
-          tax_amount: tax,
-          discount_amount: discount,
-          total_amount: charges.total,
-          commission_amount: charges.commission,
-          platform_fee: charges.platformFee,
-          owner_net: charges.ownerNet,
+          currency: quote.currency,
+          subtotal_amount: quote.subtotal,
+          delivery_fee: quote.delivery_fee,
+          tax_amount: quote.tax,
+          discount_amount: quote.discount,
+          total_amount: quote.total,
+          commission_amount: quote.commission,
+          platform_fee: quote.platform_fee,
+          owner_net: quote.owner_net,
           pickup_required: input.pickup_required || false,
           delivery_required: input.delivery_required || false,
           pickup_address: input.pickup_address || null,
@@ -297,13 +401,13 @@ export default createHandler(async function handler(req, res) {
         .single();
       if (bookingErr) return res.status(400).json(errorEnvelope(bookingErr));
 
-      await supa.from('booking_items').insert(items.map((i) => ({ ...i, booking_id: booking.id })));
+      await supa.from('booking_items').insert(quote.items.map((i) => ({ ...i, booking_id: booking.id })));
       await supa.from('booking_status_history').insert({ booking_id: booking.id, status: 'pending_payment', actor_id: ctx.user.id });
 
       // The owner is notified only once payment is confirmed (see api/_lib/billing.js),
       // so unpaid shopping carts never reach the booking inbox.
       const full = await loadBooking(supa, booking.id);
-      return res.status(201).json(successEnvelope(full));
+      return res.status(201).json(successEnvelope({ ...full, quote }));
     }
 
     if (action === 'update-status') {
@@ -381,6 +485,7 @@ export default createHandler(async function handler(req, res) {
 
     if (action === 'request-refund') {
       const ctx = await requireUser(req);
+      await assertFeature(supa, ctx, 'feature_refunds', { label: 'Refunds' });
       const bookingId = (body(req).booking_id) || q.id;
       const reason = (body(req).reason || '').slice(0, 500) || null;
       if (!bookingId) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing booking_id')));
@@ -504,6 +609,9 @@ export default createHandler(async function handler(req, res) {
       }
       if (result.data && result.data.error === 'below_minimum') {
         return res.status(400).json(errorEnvelope(new ApiError('BELOW_MINIMUM', `Redeem at least ${REDEMPTION_MIN_POINTS} points`)));
+      }
+      if (result.data && result.data.error) {
+        return res.status(400).json(errorEnvelope(new ApiError('REDEMPTION_FAILED', 'Could not redeem points')));
       }
       const [{ data: events }, { data: profile }] = await Promise.all([
         supa.from('loyalty_events').select('*').eq('user_id', ctx.user.id).order('created_at', { ascending: false }).limit(50),

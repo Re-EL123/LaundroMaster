@@ -17,8 +17,10 @@ const submitBtn = document.getElementById('submitBtn');
 
 let selection = [];
 let servicesById = new Map();
-let deliveryFee = 0;
-let hasPlus = false;
+let quote = null;
+let quoteError = null;
+let quoteSeq = 0;
+let quoteTimer = null;
 
 function readStoredSelection() {
   try {
@@ -41,12 +43,29 @@ async function loadServices() {
   }
 }
 
-async function loadMembership() {
-  try {
-    const { data } = await api.get('/payments?action=savings');
-    deliveryFee = Number(data.delivery_fee) || 0;
-    hasPlus = Boolean(data.active);
-  } catch { /* defaults */ }
+function payload() {
+  const pickupRequired = document.getElementById('pickup_required').checked;
+  const deliveryRequired = document.getElementById('delivery_required').checked;
+  const scheduled = document.getElementById('scheduled_at').value;
+  return {
+    laundromat_id: laundromatId,
+    items: selection,
+    pickup_required: pickupRequired,
+    delivery_required: deliveryRequired,
+    pickup_address: pickupRequired ? { line1: document.getElementById('pickup_address').value.trim() } : null,
+    delivery_address: deliveryRequired ? { line1: document.getElementById('delivery_address').value.trim() } : null,
+    scheduled_at: scheduled ? new Date(scheduled).toISOString() : null,
+    customer_notes: document.getElementById('customer_notes').value.trim() || null,
+  };
+}
+
+function localEstimate() {
+  let subtotal = 0;
+  selection.forEach((item) => {
+    const svc = servicesById.get(item.service_id);
+    subtotal += (svc ? Number(svc.base_price) || 0 : 0) * item.quantity;
+  });
+  return { subtotal, delivery: 0, total: subtotal };
 }
 
 function renderSummary() {
@@ -57,32 +76,39 @@ function renderSummary() {
     submitBtn.disabled = true;
     return;
   }
-  let subtotal = 0;
+
   const rows = selection.map((item) => {
     const svc = servicesById.get(item.service_id);
     const price = svc ? Number(svc.base_price) || 0 : 0;
     const line = price * item.quantity;
-    subtotal += line;
     return `<li>${escapeHtml(svc ? svc.name : item.service_id)} × ${item.quantity} — ${svc ? currency(line) : '—'}</li>`;
   }).join('');
   summaryEl.innerHTML = `<p class="text-sm text-muted">${selection.length} item(s) selected</p><ul class="text-sm">${rows}</ul>`;
 
-  const delivery = document.getElementById('delivery_required').checked;
-  const pickup = document.getElementById('pickup_required').checked;
-  const waived = hasPlus && (delivery || pickup);
-  const fee = (delivery || pickup) ? (waived ? 0 : deliveryFee) : 0;
-  const total = subtotal + fee;
+  const estimate = localEstimate();
+  const subtotal = quote ? Number(quote.subtotal) || 0 : estimate.subtotal;
+  const delivery = quote ? Number(quote.delivery_fee) || 0 : 0;
+  const total = quote ? Number(quote.total) || 0 : estimate.total;
 
-  orderSummaryEl.innerHTML = moneyBreakdown([
-    { label: 'Subtotal', value: currency(subtotal) },
-    { label: waived ? 'Collection & delivery (Plus)' : 'Collection & delivery', value: currency(fee) },
-    ...(waived && deliveryFee ? [{ label: 'Plus savings', value: `- ${currency(deliveryFee)}`, sub: true }] : []),
-  ], { total: currency(total) });
+  const lines = [{ label: 'Subtotal', value: currency(subtotal) }];
+  lines.push({
+    label: quote && quote.zone && quote.zone.name ? `Collection & delivery · ${quote.zone.name}` : 'Collection & delivery',
+    value: currency(delivery),
+  });
+  if (quote && quote.has_plan) lines.push({ label: 'Plus savings', value: 'Free delivery', sub: true });
 
-  if (!hasPlus && deliveryFee && (delivery || pickup)) {
+  orderSummaryEl.innerHTML = moneyBreakdown(lines, { total: currency(total) });
+
+  if (quote && quote.out_of_area) {
+    plusUpsellEl.innerHTML = `<div class="callout"><strong class="text-sm">Outside the delivery area</strong>
+      <p class="text-xs text-muted">This laundromat does not deliver to that address. Try a nearby laundromat or choose drop-off.</p></div>`;
+  } else if (quote && quote.hours_error) {
+    plusUpsellEl.innerHTML = `<div class="callout"><strong class="text-sm">Closed at that time</strong>
+      <p class="text-xs text-muted">${escapeHtml(quote.hours_error)}</p></div>`;
+  } else if (quote && !quote.has_plan && delivery > 0) {
     plusUpsellEl.innerHTML = `<div class="callout callout-primary">
       <div>
-        <strong class="text-sm">Save ${currency(deliveryFee)} with LaundroMaster+</strong>
+        <strong class="text-sm">Save ${currency(delivery)} with LaundroMaster+</strong>
         <p class="text-xs text-muted">Members get free collection &amp; delivery on every order.</p>
         <a class="btn btn-primary text-sm mt-4" href="profile.html">Join from profile</a>
       </div>
@@ -90,6 +116,33 @@ function renderSummary() {
   } else {
     plusUpsellEl.innerHTML = '';
   }
+
+  submitBtn.disabled = Boolean((quote && (quote.out_of_area || quote.hours_error)) || quoteError);
+  if (quoteError) {
+    msg.textContent = quoteError;
+    msg.className = 'form-msg is-error';
+  }
+}
+
+function scheduleQuote() {
+  clearTimeout(quoteTimer);
+  quoteTimer = setTimeout(refreshQuote, 350);
+}
+
+async function refreshQuote() {
+  if (!selection.length || !laundromatId) return;
+  const seq = ++quoteSeq;
+  try {
+    const res = await api.post('/bookings?action=quote', payload());
+    if (seq !== quoteSeq) return;
+    quote = res.data;
+    quoteError = null;
+  } catch (err) {
+    if (seq !== quoteSeq) return;
+    quote = null;
+    quoteError = err.message || 'Could not calculate the total.';
+  }
+  renderSummary();
 }
 
 function toggleAddressFields() {
@@ -100,10 +153,15 @@ function toggleAddressFields() {
   document.getElementById('pickup_address').required = pickup;
   document.getElementById('delivery_address').required = delivery;
   renderSummary();
+  scheduleQuote();
 }
 
 document.getElementById('pickup_required').addEventListener('change', toggleAddressFields);
 document.getElementById('delivery_required').addEventListener('change', toggleAddressFields);
+['pickup_address', 'delivery_address', 'scheduled_at'].forEach((id) => {
+  document.getElementById(id).addEventListener('input', scheduleQuote);
+  document.getElementById(id).addEventListener('change', scheduleQuote);
+});
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -112,21 +170,8 @@ form.addEventListener('submit', async (e) => {
   submitBtn.disabled = true;
   submitBtn.textContent = 'Placing booking…';
 
-  const pickupRequired = document.getElementById('pickup_required').checked;
-  const deliveryRequired = document.getElementById('delivery_required').checked;
-  const payload = {
-    laundromat_id: laundromatId,
-    items: selection,
-    pickup_required: pickupRequired,
-    delivery_required: deliveryRequired,
-    pickup_address: pickupRequired ? { line1: document.getElementById('pickup_address').value.trim() } : null,
-    delivery_address: deliveryRequired ? { line1: document.getElementById('delivery_address').value.trim() } : null,
-    scheduled_at: document.getElementById('scheduled_at').value ? new Date(document.getElementById('scheduled_at').value).toISOString() : null,
-    customer_notes: document.getElementById('customer_notes').value.trim() || null,
-  };
-
   try {
-    const res = await api.post('/bookings?action=create', payload);
+    const res = await api.post('/bookings?action=create', payload());
     sessionStorage.removeItem('lm_booking_selection');
     toast('Booking created', 'success');
     location.href = 'order-details.html?id=' + encodeURIComponent(res.data.id);
@@ -149,6 +194,7 @@ form.addEventListener('submit', async (e) => {
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
   document.getElementById('scheduled_at').min = now.toISOString().slice(0, 16);
   selection = readStoredSelection() || [];
-  await Promise.all([loadServices(), loadMembership()]);
+  await loadServices();
   renderSummary();
+  await refreshQuote();
 })();

@@ -9,7 +9,14 @@ export function payfastConfig() {
   const passphrase = (process.env.PAYFAST_PASSPHRASE || process.env.PAYFAST_WEBHOOK_SECRET || '').trim();
   const baseUrl = (process.env.PAYFAST_BASE_URL || 'https://www.payfast.co.za').replace(/\/$/, '');
   const mode = process.env.PAYFAST_MODE === 'live' ? 'live' : 'test';
-  return { merchantId, merchantKey, passphrase, baseUrl, mode, appId: process.env.PAYFAST_MERCHANT_ID || process.env.PAYFAST_APP_ID || '' };
+  return {
+    merchantId,
+    merchantKey,
+    passphrase,
+    baseUrl,
+    mode,
+    appId: process.env.PAYFAST_MERCHANT_ID || process.env.PAYFAST_APP_ID || '',
+  };
 }
 
 export function isConfigured() {
@@ -17,20 +24,43 @@ export function isConfigured() {
   return Boolean(merchantId && merchantKey);
 }
 
-export function signPayload(params, passphrase = null) {
-  const data = { ...(params || {}) };
-  const pass = passphrase !== null && passphrase !== undefined ? String(passphrase).trim() : '';
-  const entries = Object.keys(data)
-    .filter((k) => k !== 'signature')
-    .filter((k) => data[k] !== undefined && data[k] !== null && String(data[k]).trim() !== '')
-    .sort();
-  let str = entries
-    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(String(data[k]).trim())}`)
-    .join('&');
-  if (pass) {
-    str = `${str}${str ? '&' : ''}passphrase=${encodeURIComponent(pass)}`;
+/**
+ * PHP's `urlencode()` — what PayFast uses when it computes signatures.
+ * `encodeURIComponent` is close, but leaves `!'()*~` alone and encodes spaces
+ * as %20, both of which change the MD5.
+ */
+export function phpUrlEncode(value) {
+  return encodeURIComponent(String(value))
+    .replace(/%20/g, '+')
+    .replace(/[!'()*~]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+function signatureString(params, passphrase = '', { sortKeys = false } = {}) {
+  const data = params || {};
+  let keys = Object.keys(data).filter((key) => key !== 'signature' && key !== 'Signature');
+  if (sortKeys) keys = keys.slice().sort();
+  const pairs = [];
+  for (const key of keys) {
+    const value = data[key];
+    if (value === undefined || value === null) continue;
+    const text = String(value).trim();
+    if (text === '') continue;
+    pairs.push(`${key}=${phpUrlEncode(text)}`);
   }
-  return createHash('md5').update(str).digest('hex');
+  let str = pairs.join('&');
+  const pass = String(passphrase || '').trim();
+  if (pass) str = `${str}${str ? '&' : ''}passphrase=${phpUrlEncode(pass)}`;
+  return str;
+}
+
+/**
+ * Build a PayFast signature. Fields are hashed in object insertion order —
+ * that is the order PayFast reads the form fields in. `sortKeys` exists only
+ * for tolerant ITN verification.
+ */
+export function signPayload(params, passphrase = null, { sortKeys = false } = {}) {
+  const pass = passphrase !== null && passphrase !== undefined ? String(passphrase).trim() : '';
+  return createHash('md5').update(signatureString(params, pass, { sortKeys })).digest('hex');
 }
 
 function payfastProcessBase(cfg) {
@@ -42,19 +72,20 @@ export async function confirmItnWithPayfast(params) {
   const cfg = payfastConfig();
   if (!isConfigured() || !params || typeof params !== 'object') return false;
 
-  const body = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (key === 'signature' || value == null || String(value).trim() === '') continue;
-    body.append(key, String(value).trim());
-  }
-  if (!body.toString()) return false;
+  // Preserve the field order PayFast sent: the validation endpoint compares
+  // the raw body against the transaction it recorded.
+  const body = Object.entries(params)
+    .filter(([key]) => key !== 'signature' && key !== 'Signature')
+    .map(([key, value]) => `${key}=${phpUrlEncode(value == null ? '' : String(value).trim())}`)
+    .join('&');
+  if (!body) return false;
 
   const url = `${payfastProcessBase(cfg)}/eng/query/validate`;
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
+      body,
     });
     if (!res.ok) return false;
     const text = (await res.text()).trim();
@@ -94,6 +125,7 @@ export async function createPaymentLink({
   }
 
   const amountStr = (Number(amount || 0)).toFixed(2);
+  // Object order matters: PayFast signs the fields in the order they appear.
   const params = {
     merchant_id: cfg.merchantId,
     merchant_key: cfg.merchantKey,
@@ -125,9 +157,13 @@ export async function createPaymentLink({
   };
 }
 
-// Best-effort status lookup when the client returns before the ITN webhook lands.
-export async function getPaymentStatus(paylinkId, itnParams = null) {
-  if (itnParams && typeof itnParams === 'object') {
+/**
+ * PayFast has no synchronous "get status" API — the ITN is the source of
+ * truth. If the caller supplies ITN fields (for example from a server-side
+ * callback) they are validated; otherwise the caller keeps its stored status.
+ */
+export async function getPaymentStatus(reference, itnParams = null) {
+  if (itnParams && typeof itnParams === 'object' && Object.keys(itnParams).length) {
     const res = await validatePayment(itnParams);
     if (res.valid) {
       const status = res.data.payment_status || res.data.status || 'COMPLETE';
@@ -135,32 +171,65 @@ export async function getPaymentStatus(paylinkId, itnParams = null) {
     }
     return null;
   }
-  if (!paylinkId) return null;
-  const res = await validatePayment({ m_payment_id: paylinkId });
-  if (res.valid) {
-    const status = res.data.payment_status || res.data.status || 'COMPLETE';
-    return { status, data: res.data };
-  }
   return null;
 }
 
-export function verifyWebhookSignature({ body = {}, signature, headers = {} } = {}) {
-  const sig = signature || body.signature || body.SIGNATURE || headers['x-payfast-signature'] || headers['X-PayFast-Signature'] || headers.signature;
-  if (!sig || typeof body !== 'object') return false;
-  const params = { ...body };
-  const cfg = payfastConfig();
-  const candidates = [
-    signPayload(params, cfg.passphrase),
-    signPayload(params),
-  ];
-  const b = Buffer.from(String(sig));
-  for (const c of candidates) {
-    const a = Buffer.from(c);
-    if (a.length === b.length) {
-      try {
-        if (timingSafeEqual(a, b)) return true;
-      } catch { /* length mismatch */ }
+/** Accepts an object, a URL-encoded body, or an already-parsed payload. */
+function payloadEntries(source) {
+  if (!source) return [];
+  if (typeof source === 'string') {
+    try {
+      return [...new URLSearchParams(source).entries()];
+    } catch {
+      return [];
     }
   }
+  const entries = Object.entries(source);
+  // Fastify/Vercel may hand us a nested `{ data: {...} }` payload.
+  if (entries.length === 1 && entries[0][0] === 'data' && entries[0][1] && typeof entries[0][1] === 'object') {
+    return Object.entries(entries[0][1]);
+  }
+  return entries;
+}
+
+export function verifyWebhookSignature({ body = {}, raw = null, signature, headers = {} } = {}) {
+  const headerBag = headers || {};
+  const sig = signature
+    || (body && (body.signature || body.Signature))
+    || headerBag['x-payfast-signature']
+    || headerBag['X-PayFast-Signature']
+    || headerBag.signature;
+  if (!sig || typeof sig !== 'string') return false;
+
+  const params = Object.fromEntries(payloadEntries(raw || body));
+  if (!Object.keys(params).length) return false;
+
+  const cfg = payfastConfig();
+  // PayFast signs in form order; we also try the sorted order because some
+  // integrations rebuild the payload alphabetically. Never accept a signature
+  // computed without the configured passphrase: those fields are public, so
+  // anyone could recreate them.
+  const candidates = new Set([
+    signPayload(params, cfg.passphrase),
+    signPayload(params, cfg.passphrase, { sortKeys: true }),
+  ].map((value) => value.toLowerCase()));
+
+  const provided = String(sig).trim().toLowerCase();
+  const a = Buffer.from(provided);
+  for (const candidate of candidates) {
+    const b = Buffer.from(candidate);
+    if (a.length !== b.length) continue;
+    try {
+      if (timingSafeEqual(a, b)) return true;
+    } catch { /* unreachable — lengths match */ }
+  }
   return false;
+}
+
+/** Numeric amount from an ITN payload (`amount_gross` is PayFast's). */
+export function itnAmount(params = {}) {
+  const source = params && params.data && typeof params.data === 'object' ? params.data : params;
+  const raw = source.amount_gross ?? source.AMOUNT_GROSS ?? source.amount ?? source.AMOUNT;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
 }

@@ -31,7 +31,7 @@
     <form class="toolbar" id="searchForm">
       <div class="field" style="flex:1; min-width:220px;">
         <label class="label" for="q">Search</label>
-        <input class="input" id="q" name="q" type="search" placeholder="Suburb, name or service">
+        <input class="input" id="q" name="q" type="search" placeholder="Suburb, town or address">
       </div>
       <div class="field">
         <label class="label" for="min_rating">Min rating</label>
@@ -45,16 +45,29 @@
         <label class="label" for="max_price">Max price</label>
         <input class="input" id="max_price" type="number" min="0" step="10" placeholder="e.g. 80">
       </div>
+      <div class="field">
+        <label class="label" for="radius">Within</label>
+        <select class="select" id="radius">
+          <option value="5">5 km</option>
+          <option value="10">10 km</option>
+          <option value="25" selected>25 km</option>
+          <option value="50">50 km</option>
+          <option value="100">100 km</option>
+        </select>
+      </div>
       <button class="btn btn-primary" type="submit">Search</button>
       <button class="btn btn-secondary" type="button" id="nearBtn">Near me</button>
     </form>
     <div class="filter-bar" id="sortBar" role="group" aria-label="Sort results">
       <button class="chip is-active" data-sort="featured" type="button">Recommended</button>
+      <button class="chip" data-sort="distance" type="button">Nearest</button>
       <button class="chip" data-sort="rating" type="button">Top rated</button>
       <button class="chip" data-sort="newest" type="button">Newest</button>
       <span class="text-sm text-muted" id="resultCount" style="margin-left:auto"></span>
     </div>
+    <div id="bannerAds"></div>
     <div class="card-grid mt-4" id="list"></div>
+    <div id="moreWrap" class="mt-4"></div>
   </main>
   <script src="../js/config.js?v=20"></script>
   <script type="module" src="../js/discover.js?v=20"></script>

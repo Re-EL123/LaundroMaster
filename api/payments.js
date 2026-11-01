@@ -150,15 +150,19 @@ export default createHandler(async function handler(req, res) {
       // Apply any store credit before charging the gateway. Atomically done in Postgres,
       // idempotent (skips once a payment attempt exists) and never double-spends.
       let amount = Number(booking.total_amount) || 0;
+      let creditApplied = 0;
       if (amount > 0 && !existing) {
         const creditResult = await supa.rpc('apply_store_credit', { p_booking_id: booking_id });
         if (!creditResult.error && creditResult.data && creditResult.data.error !== 'not_found') {
           amount = Number(creditResult.data.amount);
-          if (Number(creditResult.data.applied) > 0) {
+          creditApplied = Number(creditResult.data.applied) || 0;
+          if (creditApplied > 0) {
             booking.total_amount = amount;
           }
         }
       }
+      // Remember how much credit was consumed so a refund can restore it.
+      const paymentMetadata = creditApplied > 0 ? { credit_applied: creditApplied } : undefined;
 
       // Free orders (or already-paid) skip the gateway entirely.
       if (amount <= 0) {
@@ -169,6 +173,7 @@ export default createHandler(async function handler(req, res) {
             provider: 'payfast', amount: 0, currency: booking.currency || 'ZAR',
             status: 'succeeded', paid_at: new Date().toISOString(),
             idempotency_key: `booking:${booking_id}`,
+            metadata: paymentMetadata,
           }).select().single();
           payment = ins.data;
         }
@@ -196,6 +201,7 @@ export default createHandler(async function handler(req, res) {
           booking_id, user_id: booking.customer_id, purpose: 'booking',
           provider: 'payfast', amount, currency: booking.currency || 'ZAR',
           status: 'created', idempotency_key: `booking:${booking_id}`,
+          metadata: paymentMetadata,
         }).select().single();
         if (ins.error && ins.error.code === '23505') {
           const retry = await supa.from('payments').select('*').eq('booking_id', booking_id).order('created_at', { ascending: false }).limit(1).maybeSingle();
@@ -263,7 +269,8 @@ export default createHandler(async function handler(req, res) {
     }
 
     if (action === 'verify') {
-      const paymentId = body(req).payment_id || q.id;
+      const input = body(req);
+      const paymentId = input.payment_id || q.id;
       if (!paymentId) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing payment_id')));
       const { data: payment } = await supa.from('payments').select('*').eq('id', paymentId).maybeSingle();
       if (!payment) return res.status(404).json(errorEnvelope(new ApiError('NOT_FOUND', 'Payment not found', 404)));
@@ -272,9 +279,12 @@ export default createHandler(async function handler(req, res) {
       }
 
       let updated = payment;
-      if (payment.status !== 'succeeded' && payment.status !== 'failed') {
-        const gatewayRef = payment.paylink_id || payment.provider_reference || payment.id;
-        const statusData = gatewayRef ? await getPaymentStatus(gatewayRef) : null;
+      // PayFast's ITN is the source of truth. If the caller has ITN fields
+      // (server-side or a replayed callback) validate them; otherwise report
+      // the stored state — there is no synchronous status API to poll.
+      const itn = input.itn && typeof input.itn === 'object' ? input.itn : null;
+      if (itn && payment.status !== 'succeeded') {
+        const statusData = await getPaymentStatus(payment.provider_reference || payment.id, itn);
         const raw = statusData && (statusData.status || statusData.paymentStatus || statusData.responseCode);
         if (raw) updated = await reconcilePayment(supa, payment, raw) || payment;
       }
@@ -282,7 +292,13 @@ export default createHandler(async function handler(req, res) {
       if (updated.purpose === 'subscription') {
         subscription = await activeSubscription(supa, updated.user_id, updated.audience);
       }
-      return res.status(200).json(successEnvelope({ payment: updated, subscription }));
+      return res.status(200).json(successEnvelope({
+        payment: updated,
+        subscription,
+        gateway_reference: updated.provider_reference || updated.id,
+        gateway_payment_id: updated.paylink_id || null,
+        pending: updated.status === 'pending' || updated.status === 'created',
+      }));
     }
 
     return res.status(405).json(errorEnvelope(new ApiError('METHOD_NOT_ALLOWED', 'Method not allowed', 405)));

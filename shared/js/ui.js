@@ -72,10 +72,19 @@ const FLOW_STEPS = [
 ];
 
 export function statusStepper(status) {
-  const terminal = ['cancelled', 'rejected', 'payment_failed'].includes(status);
+  const terminal = ['cancelled', 'rejected', 'payment_failed', 'refunded'].includes(status);
   let current = 0;
   FLOW_STEPS.forEach((step, i) => { if (step.statuses.includes(status)) current = i; });
-  const refundNote = status === 'refund_pending' ? '<p class="text-xs text-muted">Refund requested — we will update you soon.</p>' : '';
+  const notes = {
+    refund_pending: 'Refund requested — we will update you soon.',
+    refunded: 'This order was refunded.',
+    payment_failed: 'The payment did not go through.',
+    rejected: 'The laundromat could not accept this order.',
+    cancelled: 'This order was cancelled.',
+  };
+  const refundNote = notes[status]
+    ? `<p class="text-xs text-muted">${escapeHtml(notes[status])}</p>`
+    : '';
   const steps = FLOW_STEPS.map((step, i) => {
     const state = terminal ? 'cancelled' : i < current ? 'done' : i === current ? 'current' : 'upcoming';
     return `<div class="stepper-step is-${state}">

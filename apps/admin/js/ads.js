@@ -39,11 +39,49 @@ import { mountDashboard } from '../../../shared/js/shell.js';
         <div style="text-align:center"><div style="font-size:1.5rem;font-weight:700">${ctr}%</div><div class="text-xs text-muted">CTR</div></div>
       </div>
       <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" data-edit="${a.id}">Edit</button>
         <button class="btn btn-secondary" data-toggle="${a.id}" data-active="${a.is_active}">${a.is_active ? 'Deactivate' : 'Activate'}</button>
         <button class="btn btn-danger" data-del="${a.id}">Delete</button>
       </div>
     </div></article>`;
   }
+
+  let editing = null;
+  const formTitle = document.getElementById('formTitle');
+  const submitBtn = document.getElementById('adSubmit');
+  const cancelBtn = document.getElementById('adCancel');
+
+  function setFormMode(ad) {
+    editing = ad || null;
+    formTitle.textContent = ad ? `Edit ad: ${ad.title}` : 'Create ad';
+    submitBtn.textContent = ad ? 'Save changes' : 'Save';
+    cancelBtn.hidden = !ad;
+  }
+
+  function resetForm() {
+    form.reset();
+    setFormMode(null);
+    mediaPathInput.value = '';
+    mediaPreview.innerHTML = '';
+  }
+
+  function beginEdit(ad) {
+    setFormMode(ad);
+    form.elements.title.value = ad.title || '';
+    form.elements.placement.value = ad.placement || 'banner';
+    form.elements.media_type.value = ad.media_type || 'image';
+    form.elements.link_url.value = ad.link_url || '';
+    form.elements.priority.value = Number(ad.priority) || 0;
+    mediaPathInput.value = ad.media_path || '';
+    const parts = String(ad.media_path || '').split('/');
+    const url = parts.length > 1 ? publicUrl(parts[0], parts.slice(1).join('/')) : ad.media_path;
+    mediaPreview.innerHTML = ad.media_type === 'video'
+      ? `<video src="${url}" controls style="max-width:100%;border-radius:8px"></video>`
+      : (url ? `<img src="${url}" style="max-width:100%;border-radius:8px">` : '');
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  cancelBtn.addEventListener('click', resetForm);
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -51,12 +89,17 @@ import { mountDashboard } from '../../../shared/js/shell.js';
     const payload = Object.fromEntries(fd.entries());
     payload.priority = Number(payload.priority) || 0;
     try {
-      await api.post('/admin?action=ad-create', payload);
-      toast('Ad created', 'success');
-      form.reset();
+      if (editing) {
+        await api.post('/admin?action=ad-update', { ...payload, id: editing.id });
+        toast('Ad updated', 'success');
+      } else {
+        await api.post('/admin?action=ad-create', payload);
+        toast('Ad created', 'success');
+      }
+      resetForm();
       load();
     } catch (err) {
-      toast(err.message || 'Could not create ad', 'danger');
+      toast(err.message || (editing ? 'Could not update ad' : 'Could not create ad'), 'danger');
     }
   });
 
@@ -92,6 +135,16 @@ import { mountDashboard } from '../../../shared/js/shell.js';
 
   list.addEventListener('click', async (e) => {
     const t = e.target;
+    if (t.dataset.edit) {
+      try {
+        const { data: ads } = await api.get('/admin?action=ads');
+        const ad = (ads || []).find((row) => row.id === t.dataset.edit);
+        if (ad) beginEdit(ad);
+      } catch (err) {
+        toast(err.message || 'Could not load ad', 'danger');
+      }
+      return;
+    }
     if (t.dataset.toggle) {
       await api.post('/admin?action=ad-update', { id: t.dataset.toggle, is_active: t.dataset.active !== 'true' });
       load();

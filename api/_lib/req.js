@@ -11,7 +11,13 @@ export function query(req) {
 export function body(req) {
   if (req.body && typeof req.body === 'object') return req.body;
   if (typeof req.body === 'string') {
-    try { return JSON.parse(req.body); } catch { return {}; }
+    const text = req.body.trim();
+    if (!text) return {};
+    if (text.startsWith('{') || text.startsWith('[')) {
+      try { return JSON.parse(text); } catch { return {}; }
+    }
+    // PayFast posts application/x-www-form-urlencoded.
+    try { return Object.fromEntries(new URLSearchParams(text).entries()); } catch { return {}; }
   }
   return {};
 }

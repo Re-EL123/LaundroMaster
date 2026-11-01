@@ -56,18 +56,21 @@ redirects to `apps/portal/index.html`. Each app reads its API base from
 5. Note the production alias, e.g. `https://laundromaster-sable.vercel.app`.
 
 ## Steps
-1. Create Supabase project, then apply the schema. Either:
-   - paste the combined `supabase/apply-all.sql` into Supabase -> SQL Editor
-     (simplest), or
-   - run `supabase/migrations/0001_init.sql` then `0002_auth_roles.sql`
-     (`supabase db push`, or `DATABASE_URL=... ./scripts/apply-migrations.sh`).
-   Without this, API routes return `code:"PGRST205"` (table not found).
+1. Create a Supabase project, then apply every migration in order:
+   ```bash
+   DATABASE_URL="postgresql://..." ./scripts/apply-migrations.sh
+   ```
+   or `supabase db push` if you use the Supabase CLI. For a brand-new project
+   you can instead paste `supabase/schema.sql` into the SQL editor (it already
+   includes every migration). `supabase/apply-all.sql` does not exist — do not
+   look for it. Without the schema, API routes return `code:"PGRST205"`.
 2. Create storage buckets: `avatars`, `laundromat-media`, `verification-documents`,
    `booking-attachments`, `receipts`, `platform-assets`.
-3. Configure email provider and iKhokha sandbox + webhook secret.
-4. Set env vars on Vercel; deploy.
+3. Configure the email provider and PayFast sandbox credentials, then point the
+   PayFast `notify_url` at `https://<api-host>/api/webhooks`.
+4. Set the env vars above on Vercel and deploy.
 5. Update `apps/*/js/config.js` with the Vercel API base; push (Pages redeploys).
-6. Verify HTTPS, CORS, auth callback URLs and webhook endpoint.
+6. Verify HTTPS, CORS, auth callback URLs, and the webhook endpoint.
 
 ## Bootstrapping the first admin
 Self-registration only creates `customer` / `owner` roles. Promote an account in

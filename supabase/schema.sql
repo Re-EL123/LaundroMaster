@@ -49,6 +49,7 @@ create table if not exists laundromat_members (
   laundromat_id uuid not null references laundromats(id) on delete cascade,
   user_id uuid not null references profiles(id) on delete cascade,
   member_role text not null default 'staff' check (member_role in ('owner','manager','staff')),
+  invite_status text not null default 'active' check (invite_status in ('pending','active','declined')),
   created_at timestamptz not null default now(),
   unique (laundromat_id, user_id)
 );
@@ -96,7 +97,7 @@ create table if not exists bookings (
   status text not null default 'pending_payment' check (status in (
     'pending_payment','pending_acceptance','accepted','pickup_scheduled','collected',
     'washing','drying','ironing','ready','out_for_delivery','completed',
-    'cancelled','rejected','payment_failed','refund_pending')),
+    'cancelled','rejected','payment_failed','refund_pending','refunded')),
   currency text not null default 'ZAR',
   subtotal_amount numeric not null default 0 check (subtotal_amount >= 0),
   delivery_fee numeric not null default 0 check (delivery_fee >= 0),
@@ -155,6 +156,7 @@ create table if not exists refunds (
   amount numeric not null check (amount >= 0),
   status text not null default 'pending',
   provider_reference text,
+  processed_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -780,7 +782,8 @@ begin
   select customer_id, total_amount
     into v_user, v_amount
     from bookings
-   where id = p_booking_id;
+   where id = p_booking_id
+   for update;
   if v_user is null then
     return json_build_object('applied', 0, 'amount', v_amount, 'error', 'not_found');
   end if;
@@ -790,7 +793,7 @@ begin
     return json_build_object('applied', 0, 'amount', coalesce(v_amount, 0));
   end if;
 
-  select coalesce(credit_balance, 0) into v_credit from profiles where id = v_user;
+  select coalesce(credit_balance, 0) into v_credit from profiles where id = v_user for update;
   v_applied := least(v_credit, coalesce(v_amount, 0));
   if v_applied <= 0 then
     return json_build_object('applied', 0, 'amount', coalesce(v_amount, 0));
@@ -827,13 +830,17 @@ begin
   if p_points is null or p_points < 100 then
     return json_build_object('error', 'below_minimum');
   end if;
+  perform 1 from profiles where id = p_user_id for update;
+  if not found then
+    return json_build_object('error', 'not_found');
+  end if;
 
   select coalesce(sum(points), 0) into v_balance from loyalty_events where user_id = p_user_id;
   if v_balance < p_points then
     return json_build_object('error', 'insufficient_points');
   end if;
 
-  v_credit := (p_points / 100)::numeric;
+  v_credit := round((p_points::numeric / 100.0), 2);
   insert into loyalty_events (user_id, points, reason) values (p_user_id, -p_points, 'credit_redeemed');
   update profiles set credit_balance = round((coalesce(credit_balance, 0) + v_credit)::numeric, 2) where id = p_user_id;
   insert into credit_events (user_id, amount, reason) values (p_user_id, v_credit, 'loyalty_redeem');
@@ -889,3 +896,84 @@ begin
   update ads set impressions = impressions + 1, updated_at = now() where id = ad_id;
 end;
 $$ language plpgsql security definer set search_path = public;
+
+-- === MIGRATION 0011 PRODUCTION FIXES ===
+
+-- Rate limiting shared across serverless instances.
+create table if not exists rate_limits (
+  key text primary key,
+  count integer not null default 0,
+  window_start timestamptz not null default now()
+);
+
+alter table rate_limits enable row level security;
+
+create or replace function check_rate_limit(p_key text, p_limit integer, p_window_seconds integer)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_count integer;
+  v_start timestamptz;
+  v_window interval := make_interval(secs => greatest(p_window_seconds, 1));
+begin
+  if p_key is null or p_key = '' then
+    return json_build_object('allowed', true, 'count', 0, 'reset_at', now() + v_window);
+  end if;
+
+  -- Opportunistic cleanup so the table cannot grow without bound.
+  if random() < 0.05 then
+    delete from rate_limits where window_start < now() - interval '1 day';
+  end if;
+
+  insert into rate_limits (key, count, window_start)
+  values (p_key, 1, now())
+  on conflict (key) do update
+    set count = case
+          when rate_limits.window_start < now() - v_window then 1
+          else rate_limits.count + 1
+        end,
+        window_start = case
+          when rate_limits.window_start < now() - v_window then now()
+          else rate_limits.window_start
+        end
+  returning count, window_start into v_count, v_start;
+
+  return json_build_object(
+    'allowed', v_count <= greatest(p_limit, 1),
+    'count', v_count,
+    'limit', greatest(p_limit, 1),
+    'reset_at', v_start + v_window
+  );
+end;
+$$;
+
+grant execute on function check_rate_limit(text, integer, integer) to authenticator;
+
+create index if not exists laundromats_geo_idx
+  on laundromats (latitude, longitude)
+  where latitude is not null and longitude is not null;
+
+create index if not exists laundromats_approved_idx
+  on laundromats (verification_status, rating_average desc);
+
+-- Helper functions are server-only. They are SECURITY DEFINER, so PUBLIC
+-- execute would let any client call them directly through PostgREST.
+revoke all on function redeem_loyalty_points(uuid, integer) from public;
+revoke all on function apply_store_credit(uuid) from public;
+revoke all on function check_rate_limit(text, integer, integer) from public;
+revoke all on function increment_ad_click(uuid) from public;
+revoke all on function increment_ad_impression(uuid) from public;
+
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant execute on function redeem_loyalty_points(uuid, integer) to service_role;
+    grant execute on function apply_store_credit(uuid) to service_role;
+    grant execute on function check_rate_limit(text, integer, integer) to service_role;
+    grant execute on function increment_ad_click(uuid) to service_role;
+    grant execute on function increment_ad_impression(uuid) to service_role;
+  end if;
+end $$;

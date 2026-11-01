@@ -70,8 +70,8 @@
         <h2 class="text-sm text-muted">Team</h2>
         <form class="card" id="inviteForm">
           <div class="card-body">
-            <h2 class="card-title">Add a team member</h2>
-            <p class="text-muted text-sm">Create a staff account with login details.</p>
+            <h2 class="card-title">Invite a team member</h2>
+            <p class="text-muted text-sm">Existing LaundroMaster accounts get an invitation they must accept. New accounts are created immediately.</p>
             <div class="field">
               <label class="label" for="inviteBiz">Laundromat</label>
               <select class="input" id="inviteBiz"></select>
@@ -85,8 +85,9 @@
               <input class="input" id="inviteEmail" type="email" placeholder="name@example.com" required>
             </div>
             <div class="field">
-              <label class="label" for="invitePassword">Password</label>
-              <input class="input" id="invitePassword" type="password" minlength="6" placeholder="Min 6 chars" required>
+              <label class="label" for="invitePassword">Temporary password</label>
+              <input class="input" id="invitePassword" type="password" minlength="8" placeholder="Min 8 chars (new accounts only)">
+              <p class="text-xs text-muted">Only used when this email does not have an account yet.</p>
             </div>
             <div class="field">
               <label class="label" for="inviteRole">Role</label>
@@ -95,7 +96,7 @@
                 <option value="manager">Manager — full access</option>
               </select>
             </div>
-            <button class="btn btn-primary" type="submit" id="inviteBtn">Create staff account</button>
+            <button class="btn btn-primary" type="submit" id="inviteBtn">Send invitation</button>
             <p class="form-msg" id="teamMsg" role="status" aria-live="polite"></p>
           </div>
         </form>

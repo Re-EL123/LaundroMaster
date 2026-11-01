@@ -6,6 +6,7 @@ import { query, body, bearer } from './_lib/req.js';
 import { getUser, requireUser, topRole, ROLE_PRIORITY } from './_lib/auth.js';
 import { z } from 'zod';
 import { profileUpdate, addressSave } from './_lib/validation.js';
+import { enforceRateLimit } from './_lib/ratelimit.js';
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -14,7 +15,7 @@ const loginSchema = z.object({
 
 const registerSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(6),
+  password: z.string().min(8, 'Use at least 8 characters'),
   full_name: z.string().min(2).optional(),
   account_type: z.enum(['customer', 'owner']).default('customer'),
   ref: z.string().max(20).optional(),
@@ -27,32 +28,60 @@ async function resolveRole(admin, userId) {
   return topRole(roles) || ROLE_PRIORITY[ROLE_PRIORITY.length - 1];
 }
 
-async function bootstrapUser(admin, user, accountType, fullName) {
-  if (!admin || !user) return;
+// Provision a *confirmed* account. Called on registration only when Supabase
+// returns a session (email confirmation disabled) and on every successful
+// login, so unconfirmed sign-ups never receive roles or a laundromat.
+async function provisionUser(admin, user, { accountType = 'customer', fullName, ref } = {}) {
+  if (!admin || !user || !user.id) return;
+
+  const type = user.user_metadata?.account_type || accountType || 'customer';
+  const name = fullName || user.user_metadata?.full_name || null;
+
   await admin.from('profiles').upsert({
     id: user.id,
     email: user.email,
-    full_name: fullName || user.user_metadata?.full_name || null,
+    full_name: name,
     account_status: 'active',
   }, { onConflict: 'id' });
 
   const roles = ['customer'];
-  if (accountType === 'owner') roles.push('owner');
+  if (type === 'owner') roles.push('owner');
   await admin.from('user_roles').upsert(
     roles.map((role) => ({ user_id: user.id, role })),
-    { onConflict: 'user_id,role' }
+    { onConflict: 'user_id,role', ignoreDuplicates: true }
   );
 
-  if (accountType === 'owner') {
+  if (type === 'owner') {
     const { data: existing } = await admin.from('laundromats').select('id').eq('owner_id', user.id).limit(1);
     if (!existing || existing.length === 0) {
       await admin.from('laundromats').insert({
         owner_id: user.id,
-        name: fullName ? `${fullName}'s Laundry` : 'My Laundry',
+        name: name ? `${name}'s Laundry` : 'My Laundry',
         verification_status: 'pending',
         business_status: 'pending',
       });
     }
+  }
+
+  const referralCode = ref || user.user_metadata?.ref;
+  if (referralCode && type !== 'owner') {
+    try {
+      const code = String(referralCode).trim().toUpperCase();
+      const { data: existingReferral } = await admin.from('referrals')
+        .select('id').eq('referee_id', user.id).maybeSingle();
+      if (!existingReferral) {
+        const { data: referrer } = await admin.from('profiles')
+          .select('id').eq('referral_code', code).maybeSingle();
+        if (referrer && referrer.id !== user.id) {
+          await admin.from('referrals').insert({
+            referrer_id: referrer.id,
+            referee_id: user.id,
+            code,
+            status: 'pending',
+          });
+        }
+      }
+    } catch { /* referral linking is best effort */ }
   }
 }
 
@@ -70,12 +99,18 @@ export default createHandler(async function handler(req, res) {
     if (action === 'login') {
       const parsed = loginSchema.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
-      const { data, error } = await anon.auth.signInWithPassword(parsed.data);
+      const { email, password } = parsed.data;
+      await enforceRateLimit(admin, req, 'login-ip', { limit: 20, windowSeconds: 900 });
+      await enforceRateLimit(admin, req, 'login-account', { limit: 8, windowSeconds: 900, identifier: email.toLowerCase() });
+      const { data, error } = await anon.auth.signInWithPassword({ email, password });
       if (error || !data.session) return res.status(401).json(errorEnvelope(new ApiError('INVALID_CREDENTIALS', 'Incorrect email or password', 401)));
       const { data: profile } = await admin.from('profiles').select('account_status').eq('id', data.user.id).maybeSingle();
       if (profile && profile.account_status !== 'active') {
         return res.status(403).json(errorEnvelope(new ApiError('ACCOUNT_SUSPENDED', 'This account is not active', 403)));
       }
+      // A confirmed login is the earliest safe moment to grant roles: accounts
+      // created with email confirmation on have no profile until now.
+      await provisionUser(admin, data.user, {});
       const role = await resolveRole(admin, data.user.id);
       return res.status(200).json(successEnvelope({
         access_token: data.session.access_token,
@@ -89,19 +124,22 @@ export default createHandler(async function handler(req, res) {
       const parsed = registerSchema.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
       const { email, password, full_name, account_type, ref } = parsed.data;
-      const { data, error } = await anon.auth.signUp({ email, password, options: { data: { full_name, account_type } } });
+      await enforceRateLimit(admin, req, 'register-ip', { limit: 10, windowSeconds: 3600 });
+      await enforceRateLimit(admin, req, 'register-email', { limit: 3, windowSeconds: 3600, identifier: email.toLowerCase() });
+      const { data, error } = await anon.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name, account_type, ref: ref || null } },
+      });
       if (error) return res.status(400).json(errorEnvelope(new ApiError('REGISTRATION_FAILED', error.message)));
-      if (data.user) await bootstrapUser(admin, data.user, account_type, full_name);
-      if (ref && data.user && account_type === 'customer') {
-        try {
-          const { data: referrer } = await admin.from('profiles')
-            .select('id').eq('referral_code', String(ref).trim().toUpperCase()).maybeSingle();
-          if (referrer && referrer.id !== data.user.id) {
-            await admin.from('referrals').insert({ referrer_id: referrer.id, referee_id: data.user.id, code: String(ref).trim().toUpperCase(), status: 'pending' });
-          }
-        } catch { /* referral linking is best effort */ }
+
+      // Supabase returns a user with no identities when the email is already
+      // registered; do not leak that or provision anything.
+      const isNewUser = Boolean(data.user && Array.isArray(data.user.identities) && data.user.identities.length > 0);
+      if (isNewUser && data.session) {
+        await provisionUser(admin, data.user, { accountType: account_type, fullName: full_name, ref });
       }
-      const role = data.user ? await resolveRole(admin, data.user.id) : account_type;
+      const role = data.user && data.session ? await resolveRole(admin, data.user.id) : account_type;
       return res.status(201).json(successEnvelope({
         user: data.user ? { id: data.user.id, email: data.user.email } : null,
         session: data.session ? { access_token: data.session.access_token, refresh_token: data.session.refresh_token } : null,

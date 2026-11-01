@@ -39,6 +39,9 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return; // APIs and CDNs go straight to network.
+  // Same-origin API proxies must never be cached: stale JSON is worse than a
+  // slow response (and discovery results depend on fresh radius metadata).
+  if (/(?:^|\/)api\//.test(url.pathname)) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(

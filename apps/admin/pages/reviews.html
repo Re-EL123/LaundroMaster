@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#D90429">
+  <script>(function(){try{var t=localStorage.getItem('lm_theme');if(t!=='dark'&&t!=='light'){t=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',t==='dark'?'#0B0B0D':'#D90429');}catch(e){}})();</script>
+  <link rel="icon" href="../../../shared/assets/favicon-32.png?v=20">
+  <link rel="apple-touch-icon" href="../../../shared/assets/apple-touch-icon.png?v=20">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="LaundroMaster">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <title>Admin Reviews - LaundroMaster</title>
+  <link rel="stylesheet" href="../../../shared/css/tokens.css?v=20">
+  <link rel="stylesheet" href="../../../shared/css/reset.css?v=20">
+  <link rel="stylesheet" href="../../../shared/css/layout.css?v=20">
+  <link rel="stylesheet" href="../../../shared/css/buttons.css?v=20">
+  <link rel="stylesheet" href="../../../shared/css/cards.css?v=20">
+  <link rel="stylesheet" href="../../../shared/css/forms.css?v=20">
+  <link rel="stylesheet" href="../../../shared/css/utilities.css?v=20">
+  <link rel="stylesheet" href="../../../shared/css/motion.css?v=20">
+  <link rel="stylesheet" href="../css/admin.css?v=20">
+</head>
+<body data-admin-action="reviews">
+  <aside class="sidebar">
+    <a class="brand" href="../index.html"><img src="../../../shared/assets/app-icon.png?v=20" alt="" width="28" height="28">LM Admin</a>
+    <nav class="side-nav">
+      <a href="../index.html">Dashboard</a>
+      <a href="laundromats.html">Laundromats</a>
+      <a href="verifications.html">Verifications</a>
+      <a href="reviews.html">Reviews</a>
+      <a href="users.html">Users</a>
+      <a href="plans.html">Plans</a>
+      <a href="commissions.html">Commissions</a>
+      <a href="payouts.html">Payouts</a>
+      <a href="payments.html">Payments</a>
+      <a href="promotions.html">Promotions</a>
+      <a href="ads.html">Ads</a>
+      <a href="refunds.html">Refunds</a>
+      <a href="settings.html">Settings</a>
+      <a href="audit.html">Audit</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header class="topbar page-shell flex justify-between">
+      <h1>Reviews</h1>
+      <div id="sessionMount" class="session-control"></div>
+      <div id="notifMount" class="session-control"></div>
+    </header>
+    <div class="page-shell content">
+      <div class="filter-bar" id="statusBar" role="group" aria-label="Filter reviews">
+        <button class="chip is-active" data-status="pending" type="button">Pending</button>
+        <button class="chip" data-status="published" type="button">Published</button>
+        <button class="chip" data-status="hidden" type="button">Hidden</button>
+        <button class="chip" data-status="" type="button">All</button>
+      </div>
+      <p class="text-muted text-sm" style="margin:var(--space-4) 0">Only published reviews are visible to customers and counted in ratings.</p>
+      <div class="card-grid" id="list"></div>
+    </div>
+  </main>
+  <script src="../js/config.js?v=20"></script>
+  <script type="module" src="../js/reviews.js?v=20"></script>
+</body>
+</html>

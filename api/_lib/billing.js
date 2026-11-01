@@ -15,7 +15,7 @@ export function normalizeStatus(raw) {
   return null;
 }
 
-export async function markPaymentStatus(supa, payment, status, rawStatus = null, extra = {}) {
+export async function markPaymentStatus(supa, payment, status, rawStatus = null, extra = {}, { onlyIfNotSucceeded = false } = {}) {
   const now = new Date().toISOString();
   const patch = { status, updated_at: now };
   if (rawStatus != null) patch.raw_status = String(rawStatus);
@@ -23,8 +23,13 @@ export async function markPaymentStatus(supa, payment, status, rawStatus = null,
   if (extra && Object.keys(extra).length) {
     patch.metadata = { ...(payment.metadata || {}), ...extra };
   }
-  const { data } = await supa.from('payments').update(patch).eq('id', payment.id).select().single();
-  return data || { ...payment, ...patch };
+  let update = supa.from('payments').update(patch).eq('id', payment.id);
+  if (onlyIfNotSucceeded) update = update.neq('status', 'succeeded');
+  const { data } = await update.select().maybeSingle();
+  if (data) return data;
+  // A guarded update matched nothing: another worker already completed it.
+  if (onlyIfNotSucceeded) return null;
+  return { ...payment, ...patch };
 }
 
 async function activatePromotion(supa, payment) {
@@ -67,8 +72,13 @@ export async function reconcilePayment(supa, payment, rawStatus) {
   if (!status) return payment;
 
   const wasSucceeded = payment.status === 'succeeded';
-  const updated = await markPaymentStatus(supa, payment, status, rawStatus);
-  if (status === 'succeeded' && wasSucceeded) return updated; // idempotent
+  if (wasSucceeded && status === 'succeeded') return payment; // idempotent
+  // Guard the transition into `succeeded` so duplicate/concurrent ITNs cannot
+  // activate the same subscription or promotion twice.
+  const updated = await markPaymentStatus(supa, payment, status, rawStatus, {}, {
+    onlyIfNotSucceeded: status === 'succeeded',
+  });
+  if (!updated) return { ...payment, status: 'succeeded' };
   if (status !== 'succeeded') {
     if (status === 'failed' && payment.purpose === 'booking' && payment.booking_id) {
       await supa.from('bookings')

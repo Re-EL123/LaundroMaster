@@ -12,7 +12,7 @@ with a Supabase backend, deployed as **static frontend on GitHub Pages** and
 
 ## Stack
 HTML5 · CSS3 · Vanilla JS ES modules · Vercel Serverless Functions (max 12) ·
-Supabase Auth/PostgreSQL/Storage/Realtime · iKhokha payments (via API).
+Supabase Auth/PostgreSQL/Storage/Realtime · PayFast payments (via API).
 
 ## Layout
 ```
@@ -42,8 +42,10 @@ remain authoritative. See `docs/deployment.md`.
 
 ## Backend routing
 Functions auto-detect from `api/*.js` (`auth`, `laundromats`, `bookings`,
-`payments`, `webhooks`, `uploads`, `reviews`, `notifications`, `owner`,
-`admin`, `analytics`, `geo`). `api/_lib/` are helper modules, not routes.
+`payments`, `webhooks`, `uploads`, `reviews`, `staff`, `notifications`, `ads`,
+`owner`, `admin`, `geo`). `api/_lib/` are helper modules, not routes.
+Aggregate metrics live under `/api/owner?action=analytics` and
+`/api/admin?action=analytics`.
 
 ## Deployment
 - **API:** `vercel --prod` (set env vars first). See `docs/deployment.md`.

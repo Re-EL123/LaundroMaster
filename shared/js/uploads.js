@@ -26,14 +26,15 @@ export async function resolveUrl(bucket, path) {
   }
 }
 
-function extension(name = '') {
-  const ext = (name.split('.').pop() || '').toLowerCase();
-  return /^(png|jpe?g|webp|gif|avif|heic)$/.test(ext) ? ext.replace('jpeg', 'jpg') : 'jpg';
-}
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function docExtension(name = '') {
-  const ext = (name.split('.').pop() || '').toLowerCase();
-  return /^(pdf|doc|docx|png|jpe?g|webp|gif|avif|heic|heif|mp4|webm|mov)$/.test(ext) ? ext.replace(/^jpeg$/, 'jpg') : 'pdf';
+// Translate the UI's `prefix` convention into the server's scope parameter.
+function scopePayload(bucket, prefix) {
+  if (!prefix) return {};
+  const first = String(prefix).split('/')[0];
+  if (first === 'ads') return { scope: 'ads' };
+  if (UUID_RE.test(first)) return { laundromat_id: first };
+  return {};
 }
 
 // Uploads a non-image verification/business document and returns its storage path.
@@ -44,13 +45,15 @@ export async function uploadDocument(file, { bucket = 'verification-documents', 
   const allowed = /^(application\/pdf|text\/plain|image\/(png|jpe?g|webp|gif|avif|heic)|video\/(mp4|webm|quicktime)|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document)$/i;
   if (!allowed.test(file.type || '')) throw new Error('Please choose a PDF, image or Word document');
 
-  const cleanPrefix = prefix ? `${prefix.replace(/^\/|\/$/g, '')}/` : '';
-  const path = `${cleanPrefix}${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${docExtension(file.name)}`;
-
-  const { data } = await api.post('/uploads?action=sign', { bucket, path, filename: file.name });
+  const { data } = await api.post('/uploads?action=sign', {
+    bucket,
+    filename: file.name,
+    content_type: file.type || 'application/octet-stream',
+    ...scopePayload(bucket, prefix),
+  });
   const put = await fetch(data.signed_url, {
     method: 'PUT',
-    headers: { 'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'true' },
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
     body: file,
   });
   if (!put.ok) throw new Error('Upload failed. Please try again.');
@@ -63,13 +66,15 @@ export async function uploadImage(file, { bucket = 'laundromat-media', prefix = 
   if (!file.type || !file.type.startsWith('image/')) throw new Error('Please choose an image file');
   if (file.size > MAX_BYTES) throw new Error('Image must be under 8MB');
 
-  const cleanPrefix = prefix ? `${prefix.replace(/^\/|\/$/g, '')}/` : '';
-  const path = `${cleanPrefix}${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension(file.name)}`;
-
-  const { data } = await api.post('/uploads?action=sign', { bucket, path, filename: file.name });
+  const { data } = await api.post('/uploads?action=sign', {
+    bucket,
+    filename: file.name,
+    content_type: file.type,
+    ...scopePayload(bucket, prefix),
+  });
   const put = await fetch(data.signed_url, {
     method: 'PUT',
-    headers: { 'Content-Type': file.type, 'x-upsert': 'true' },
+    headers: { 'Content-Type': file.type },
     body: file,
   });
   if (!put.ok) throw new Error('Upload failed. Please try again.');

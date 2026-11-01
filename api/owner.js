@@ -11,6 +11,7 @@ import { getSettings, num } from './_lib/settings.js';
 import { round2, activeSubscription, defaultPlan } from './_lib/pricing.js';
 import { reconcilePromotions } from './_lib/promotions.js';
 import { notifyUsers } from './_lib/push.js';
+import { geocode, validLatLng } from './_lib/geo.js';
 
 const OWNER_ROLES = ['owner', 'admin', 'super_admin'];
 
@@ -195,8 +196,9 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
 
     if (action === 'team' || action === 'staff') {
       if (!ownedIds.length) return res.status(200).json(successEnvelope([]));
-      const { data, error } = await supa.from('laundromat_members')
-        .select('*, profiles!laundromat_members_user_id_fkey(id, full_name, email)')
+      const { data, error } = await supa
+        .from('laundromat_members')
+        .select('id, laundromat_id, user_id, member_role, invite_status, created_at, laundromats(id, name), profiles!laundromat_members_user_id_fkey(id, full_name, email)')
         .in('laundromat_id', ownedIds)
         .order('created_at', { ascending: false });
       if (error) return res.status(500).json(errorEnvelope(error));
@@ -254,7 +256,7 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
     if (action === 'branding') {
       if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can view branding', 403)));
       const { data, error } = await supa.from('laundromats')
-        .select('id, name, description, address, phone, logo_path, photos, verification_status')
+        .select('id, name, description, address, phone, logo_path, photos, latitude, longitude, verification_status')
         .in('id', ids)
         .order('name');
       if (error) return res.status(400).json(errorEnvelope(error));
@@ -288,28 +290,6 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
       const { data, error } = await supa.from('payouts').select('*').eq('owner_id', ctx.user.id).order('created_at', { ascending: false });
       if (error) return res.status(500).json(errorEnvelope(error));
       return res.status(200).json(successEnvelope({ ...balance, min: num(settings.payout_min, 200), payouts: data || [] }));
-    }
-
-    if (action === 'staff') {
-      if (!ownedIds.length) return res.status(200).json(successEnvelope([]));
-      const { data, error } = await supa
-        .from('laundromat_members')
-        .select('id, laundromat_id, user_id, member_role, created_at, laundromats(id, name), profiles!laundromat_members_user_id_fkey(id, full_name, email)')
-        .in('laundromat_id', ownedIds)
-        .order('created_at', { ascending: false });
-      if (error) return res.status(500).json(errorEnvelope(error));
-      return res.status(200).json(successEnvelope(data || []));
-    }
-
-    if (action === 'staff-candidates') {
-      if (!ownedIds.length) return res.status(200).json(successEnvelope([]));
-      const { data: members } = await supa.from('laundromat_members').select('user_id').in('laundromat_id', ownedIds);
-      const memberIds = (data || []).map((m) => m.user_id);
-      let request = supa.from('profiles').select('id, full_name, email').order('created_at', { ascending: false }).limit(50);
-      if (memberIds.length) request = request.not('id', 'in', `(${memberIds.join(',')})`);
-      const { data, error } = await request;
-      if (error) return res.status(500).json(errorEnvelope(error));
-      return res.status(200).json(successEnvelope(data || []));
     }
 
     if (action === 'customers') {
@@ -352,8 +332,22 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
     if (action === 'laundromat-update') {
       const parsed = ownerLaundromatUpdate.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
-      const { laundromat_id, ...patch } = parsed.data;
+      const { laundromat_id, geocode: shouldGeocode, ...patch } = parsed.data;
       if (!ownedIds.includes(laundromat_id)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
+
+      // Keep listings discoverable: if the owner typed an address but did not
+      // drop a pin, resolve coordinates automatically so "near me" works.
+      if (patch.latitude == null && patch.longitude == null && (patch.address || shouldGeocode)) {
+        const address = patch.address || (await supa.from('laundromats').select('address').eq('id', laundromat_id).maybeSingle()).data?.address;
+        if (address) {
+          const loc = await geocode(address, { timeoutMs: 3500 });
+          if (loc) {
+            patch.latitude = loc.lat;
+            patch.longitude = loc.lng;
+          }
+        }
+      }
+
       const { data, error } = await supa.from('laundromats')
         .update({ ...patch, updated_at: new Date().toISOString() })
         .eq('id', laundromat_id)
@@ -496,7 +490,7 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
         owner_id: ctx.user.id,
         amount,
         currency: settings.currency || 'ZAR',
-        status: 'requested',
+        status: settings.payout_auto_approve ? 'processing' : 'requested',
         method: parsed.data.method || null,
         notes: parsed.data.notes || null,
       }).select().single();
@@ -511,10 +505,22 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
       const { laundromat_id, email, member_role, password, full_name, phone } = parsed.data;
       if (!ownedIds.includes(laundromat_id)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
       let profileId = null;
-      const { data: existingProfile } = await supa.from('profiles').select('id, full_name, email').ilike('email', email).maybeSingle();
+      let pending = false;
+      // Escape LIKE metacharacters: an email is matched literally, not as a pattern.
+      const emailFilter = String(email).replace(/([%_\\])/g, '\\$1');
+      const { data: existingProfile } = await supa.from('profiles').select('id, full_name, email').ilike('email', emailFilter).maybeSingle();
       if (existingProfile) {
+        // Never silently attach an existing account to a team. The owner sends
+        // an invitation and the invitee must accept it.
         profileId = existingProfile.id;
+        pending = true;
       } else {
+        if (!password) {
+          return res.status(400).json(errorEnvelope(new ApiError(
+            'PASSWORD_REQUIRED',
+            'Set a temporary password for this new staff account',
+          )));
+        }
         const { data: created, error: createErr } = await supa.auth.admin.createUser({
           email,
           password,
@@ -525,10 +531,29 @@ async function isLaundromatSetupComplete(supa, laundromatId) {
         profileId = created.user.id;
         await supa.from('profiles').update({ full_name: full_name || created.user.email, phone: phone || null }).eq('id', profileId);
       }
-      const { data: existing } = await supa.from('laundromat_members').select('id').eq('laundromat_id', laundromat_id).eq('user_id', profileId).maybeSingle();
-      if (existing) return res.status(409).json(errorEnvelope(new ApiError('ALREADY_MEMBER', 'This person is already on your team')));
-      const { data, error } = await supa.from('laundromat_members').insert({ laundromat_id, user_id: profileId, member_role }).select('*, profiles!laundromat_members_user_id_fkey(id, full_name, email)').single();
+      const { data: existing } = await supa.from('laundromat_members').select('id, invite_status').eq('laundromat_id', laundromat_id).eq('user_id', profileId).maybeSingle();
+      if (existing) {
+        const message = existing.invite_status === 'pending'
+          ? 'This person already has a pending invitation to your team'
+          : 'This person is already on your team';
+        return res.status(409).json(errorEnvelope(new ApiError('ALREADY_MEMBER', message)));
+      }
+      const { data, error } = await supa.from('laundromat_members')
+        .insert({ laundromat_id, user_id: profileId, member_role, invite_status: pending ? 'pending' : 'active' })
+        .select('*, profiles!laundromat_members_user_id_fkey(id, full_name, email)')
+        .single();
       if (error) return res.status(400).json(errorEnvelope(error));
+      if (pending) {
+        const { data: biz } = await supa.from('laundromats').select('name').eq('id', laundromat_id).maybeSingle();
+        const { notifyUser } = await import('./_lib/push.js');
+        await notifyUser(supa, profileId, {
+          type: 'staff_invite',
+          title: 'Team invitation',
+          body: `${biz ? biz.name : 'A laundromat'} invited you to join their team as ${member_role}. Open your profile to accept or decline.`,
+          url: 'apps/customer/pages/profile.html',
+        });
+        return res.status(202).json(successEnvelope({ ...data, invite_status: 'pending', pending: true }));
+      }
       await supa.from('user_roles').upsert({ user_id: profileId, role: 'staff' }, { onConflict: 'user_id,role', ignoreDuplicates: true });
       return res.status(201).json(successEnvelope(data));
     }

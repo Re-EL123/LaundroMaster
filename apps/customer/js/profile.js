@@ -51,8 +51,7 @@ if (avatarBtn) {
   });
 }
 
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
+form.addEventListener('submit', async (e) => {  e.preventDefault();
   msg.className = 'form-msg';
   const btn = document.getElementById('saveBtn');
   btn.disabled = true;
@@ -304,8 +303,8 @@ async function loadRewards() {
     if (redeemBtn) redeemBtn.addEventListener('click', async () => {
       const input = document.getElementById('redeemPoints');
       const points = Number(input && input.value);
-      if (!points || points < min || points % perRand !== 0) {
-        toast(`Redeem in multiples of ${perRand} points`, 'danger');
+      if (!points || !Number.isInteger(points) || points < min) {
+        toast(`Redeem at least ${min} points`, 'danger');
         return;
       }
       redeemBtn.disabled = true;
@@ -323,9 +322,58 @@ async function loadRewards() {
   }
 }
 
+async function loadInvites() {
+  const head = document.getElementById('invitesHead');
+  const card = document.getElementById('invitesCard');
+  if (!head || !card || !session) return;
+  try {
+    const { data: invites } = await api.get('/staff?action=invites');
+    if (!invites || !invites.length) {
+      head.hidden = true;
+      card.innerHTML = '';
+      return;
+    }
+    head.hidden = false;
+    card.innerHTML = `<div class="card"><div class="card-body stack">${invites.map((invite) => {
+      const biz = (invite.laundromats && invite.laundromats.name) || 'A laundromat';
+      return `<div class="flex justify-between items-center wrap" data-invite-row="${invite.id}">
+        <div>
+          <h3 class="card-title">${escapeHtml(biz)}</h3>
+          <p class="text-sm text-muted">Invited you as ${escapeHtml(invite.member_role)}</p>
+        </div>
+        <div class="flex items-center">
+          <button class="btn btn-primary" type="button" data-invite="${invite.id}" data-decision="accept">Accept</button>
+          <button class="btn btn-secondary" type="button" data-invite="${invite.id}" data-decision="decline">Decline</button>
+        </div>
+      </div>`;
+    }).join('')}</div></div>`;
+
+    card.querySelectorAll('[data-invite]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const decision = btn.dataset.decision;
+        card.querySelectorAll('[data-invite]').forEach((b) => { b.disabled = true; });
+        try {
+          await api.post('/staff?action=respond', { member_id: btn.dataset.invite, decision });
+          toast(decision === 'accept'
+            ? 'Invitation accepted. Sign in again to open the owner workspace.'
+            : 'Invitation declined', 'success');
+          loadInvites();
+        } catch (err) {
+          toast(err.message || 'Could not respond to the invitation', 'danger');
+          card.querySelectorAll('[data-invite]').forEach((b) => { b.disabled = false; });
+        }
+      });
+    });
+  } catch {
+    head.hidden = true;
+    card.innerHTML = '';
+  }
+}
+
 load();
 loadPlus();
 loadSavings();
 loadAddresses();
 loadRewards();
+loadInvites();
 reconcileReturn();

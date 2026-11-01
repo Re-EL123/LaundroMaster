@@ -30,6 +30,15 @@ export function mountBranding(host, laundromats = []) {
           <textarea class="input" rows="3" data-field="description">${escapeHtml(l.description || '')}</textarea></div>
         <div class="field"><label class="label">Address</label>
           <input class="input" data-field="address" value="${escapeHtml(l.address || '')}"></div>
+        <div class="field">
+          <label class="label">Map location</label>
+          <div class="flex wrap" style="gap:var(--space-3)">
+            <input class="input" data-field="latitude" inputmode="decimal" placeholder="Latitude" value="${l.latitude != null ? Number(l.latitude) : ''}">
+            <input class="input" data-field="longitude" inputmode="decimal" placeholder="Longitude" value="${l.longitude != null ? Number(l.longitude) : ''}">
+            <button type="button" class="btn btn-secondary" data-geocode>Find from address</button>
+          </div>
+          <p class="text-xs text-muted" data-geo-msg>Coordinates let customers find you with “Near me”. Saving an address fills them automatically.</p>
+        </div>
         <div class="field"><label class="label">Phone</label>
           <input class="input" data-field="phone" value="${escapeHtml(l.phone || '')}"></div>
 
@@ -52,6 +61,7 @@ export function mountBranding(host, laundromats = []) {
 
     wireLogo(card, id, state);
     wireGallery(card, id, state);
+    wireGeocode(card);
     wireSave(card, id, state);
   });
 }
@@ -107,11 +117,48 @@ function wireGallery(card, id, state) {
   });
 }
 
+function wireGeocode(card) {
+  const button = card.querySelector('[data-geocode]');
+  const msg = card.querySelector('[data-geo-msg]');
+  if (!button) return;
+  button.addEventListener('click', async () => {
+    const address = card.querySelector('[data-field="address"]').value.trim();
+    if (!address) {
+      msg.textContent = 'Add an address first.';
+      return;
+    }
+    button.disabled = true;
+    button.textContent = 'Finding…';
+    try {
+      const { api } = await import('./api-client.js');
+      const { data } = await api.get(`/geo?action=geocode&q=${encodeURIComponent(address)}`);
+      if (!data) {
+        msg.textContent = 'Could not find that address. Drop a pin manually or make the address more specific.';
+        return;
+      }
+      card.querySelector('[data-field="latitude"]').value = Number(data.lat).toFixed(6);
+      card.querySelector('[data-field="longitude"]').value = Number(data.lng).toFixed(6);
+      msg.textContent = `Matched: ${data.label || address}`;
+    } catch (err) {
+      msg.textContent = err.message || 'Could not look up that address.';
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Find from address';
+    }
+  });
+}
+
 function wireSave(card, id, state) {
   const msg = card.querySelector('[data-msg]');
   card.querySelector('[data-save]').addEventListener('click', async () => {
     const button = card.querySelector('[data-save]');
     const val = (name) => card.querySelector(`[data-field="${name}"]`).value.trim();
+    const numberOrNull = (name) => {
+      const raw = val(name);
+      if (!raw) return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : null;
+    };
     button.disabled = true;
     try {
       const { api } = await import('./api-client.js');
@@ -121,6 +168,8 @@ function wireSave(card, id, state) {
         description: val('description'),
         address: val('address'),
         phone: val('phone'),
+        latitude: numberOrNull('latitude'),
+        longitude: numberOrNull('longitude'),
         logo_path: state.logo_path,
         photos: state.photos,
       });

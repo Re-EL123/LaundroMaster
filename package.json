@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "lint": "echo 'lint: ok (stub)'",
-    "typecheck": "echo 'typecheck: ok (stub)'"
+    "lint": "node scripts/lint.mjs",
+    "typecheck": "node scripts/typecheck.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.46.1",

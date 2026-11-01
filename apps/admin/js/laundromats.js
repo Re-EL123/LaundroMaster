@@ -57,6 +57,9 @@ import { mountDashboard } from '../../../shared/js/shell.js';
           <button type="button" class="btn btn-ghost" data-close-detail>Close</button>
         </div>
         ${biz.address ? `<p class="text-sm text-muted">${escapeHtml(biz.address)}</p>` : ''}
+        <p class="text-xs text-muted">${biz.latitude != null && biz.longitude != null
+          ? `Map pin: ${Number(biz.latitude).toFixed(5)}, ${Number(biz.longitude).toFixed(5)}`
+          : 'No map pin — this listing is hidden from “Near me” results.'}</p>
         ${biz.description ? `<p class="text-sm text-muted">${escapeHtml(biz.description)}</p>` : ''}
         <p class="text-sm"><strong>${active}</strong> active services &middot; ${services.length} total</p>
         <h4 class="text-sm text-muted">Documents</h4>
@@ -148,6 +151,25 @@ import { mountDashboard } from '../../../shared/js/shell.js';
       filterBar.querySelectorAll('[data-filter]').forEach((c) => c.classList.toggle('is-active', c === chip));
       if (detail) detail.innerHTML = '';
       load();
+    });
+  }
+
+  const geocodeBtn = document.getElementById('geocodeBtn');
+  if (geocodeBtn) {
+    geocodeBtn.addEventListener('click', async () => {
+      geocodeBtn.disabled = true;
+      const original = geocodeBtn.textContent;
+      geocodeBtn.textContent = 'Looking up addresses…';
+      try {
+        const { data } = await api.post('/geo?action=backfill', { limit: 200 });
+        toast(`${data.updated} listing(s) mapped${data.failed ? `, ${data.failed} could not be found` : ''}`, data.failed ? 'info' : 'success');
+        load();
+      } catch (err) {
+        toast(err.message || 'Could not backfill coordinates', 'danger');
+      } finally {
+        geocodeBtn.disabled = false;
+        geocodeBtn.textContent = original;
+      }
     });
   }
 

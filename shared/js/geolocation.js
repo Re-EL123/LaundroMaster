@@ -1,0 +1,72 @@
+// Small wrapper around the browser geolocation API used by discovery.
+
+export function supported() {
+  return typeof navigator !== 'undefined' && Boolean(navigator.geolocation);
+}
+
+export async function permissionState() {
+  if (typeof navigator === 'undefined' || !navigator.permissions || !navigator.permissions.query) {
+    return 'prompt';
+  }
+  try {
+    const status = await navigator.permissions.query({ name: 'geolocation' });
+    return status.state || 'prompt';
+  } catch {
+    return 'prompt';
+  }
+}
+
+function toResult(pos) {
+  const c = pos && pos.coords;
+  if (!c || !Number.isFinite(c.latitude) || !Number.isFinite(c.longitude)) return null;
+  return { lat: c.latitude, lng: c.longitude, accuracy: c.accuracy };
+}
+
+/** Resolve the current position. Rejects with a readable message. */
+export function currentPosition({ enableHighAccuracy = false, timeout = 9000, maximumAge = 300000 } = {}) {
+  return new Promise((resolve, reject) => {
+    if (!supported()) {
+      reject(new Error('Geolocation is not supported by this browser.'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const result = toResult(pos);
+        if (result) resolve(result);
+        else reject(new Error('Could not read your location.'));
+      },
+      (err) => {
+        const message = err && err.code === 1
+          ? 'Location permission was denied.'
+          : err && err.code === 3
+            ? 'Finding your location took too long.'
+            : 'Could not determine your location.';
+        reject(new Error(message));
+      },
+      { enableHighAccuracy, timeout, maximumAge },
+    );
+  });
+}
+
+/** Position only when the user has already granted permission (no prompt on load). */
+export async function currentPositionIfPermitted(options = {}) {
+  if (!supported()) return null;
+  const state = await permissionState();
+  if (state !== 'granted') return null;
+  try {
+    return await currentPosition(options);
+  } catch {
+    return null;
+  }
+}
+
+export function distanceKm(a, b) {
+  if (!a || !b) return null;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}

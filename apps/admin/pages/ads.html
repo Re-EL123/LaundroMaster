@@ -30,6 +30,7 @@
       <a href="../index.html">Dashboard</a>
       <a href="laundromats.html">Laundromats</a>
       <a href="verifications.html">Verifications</a>
+      <a href="reviews.html">Reviews</a>
       <a href="users.html">Users</a>
       <a href="plans.html">Plans</a>
       <a href="commissions.html">Commissions</a>
@@ -51,7 +52,7 @@
     <div class="page-shell content">
       <div class="card" style="margin-bottom:var(--space-5)">
         <div class="card-body">
-          <h2 class="card-title">Create ad</h2>
+          <h2 class="card-title" id="formTitle">Create ad</h2>
           <form id="adForm" class="form-grid">
             <div class="field"><label class="label">Title</label><input class="input" name="title" required></div>
             <div class="field"><label class="label">Placement</label><select class="select" name="placement"><option value="hero">Hero</option><option value="banner">Banner</option><option value="popup">Popup</option></select></div>
@@ -64,7 +65,8 @@
             </div>
             <div class="field"><label class="label">Link URL</label><input class="input" name="link_url"></div>
             <div class="field"><label class="label">Priority</label><input class="input" name="priority" type="number" value="0"></div>
-            <button class="btn btn-primary" type="submit">Save</button>
+            <button class="btn btn-primary" type="submit" id="adSubmit">Save</button>
+            <button class="btn btn-secondary" type="button" id="adCancel" hidden>Cancel edit</button>
           </form>
         </div>
       </div>

@@ -10,8 +10,10 @@ import {
 } from './_lib/validation.js';
 import { getSettings, setSettings, num } from './_lib/settings.js';
 import { round2 } from './_lib/pricing.js';
+import { reverseCompletionLedger } from './_lib/pricing.js';
 import { notifyUser, notifyUsers } from './_lib/push.js';
 import { reconcilePromotions } from './_lib/promotions.js';
+import { geocode, validLatLng } from './_lib/geo.js';
 
 async function logAdmin(supa, ctx, action, targetType, targetId, detail) {
   try {
@@ -266,8 +268,21 @@ export default createHandler(async function handler(req, res) {
       const b = body(req);
       const id = b.id;
       if (!id) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing id')));
-      const patch = { ...b, updated_at: new Date().toISOString() };
-      delete patch.id;
+      // Whitelist editable fields so the payload cannot move an ad between
+      // tenants or overwrite audit columns.
+      const patch = { updated_at: new Date().toISOString() };
+      for (const key of ['title', 'placement', 'media_type', 'media_path', 'link_url', 'starts_at', 'ends_at', 'is_active', 'priority']) {
+        if (b[key] !== undefined) patch[key] = b[key];
+      }
+      if (patch.priority !== undefined) patch.priority = Number(patch.priority) || 0;
+      if (patch.is_active !== undefined) patch.is_active = patch.is_active !== false && patch.is_active !== 'false';
+      if (patch.placement !== undefined && !['hero', 'banner', 'popup'].includes(patch.placement)) {
+        return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Invalid placement')));
+      }
+      if (patch.media_type !== undefined && !['image', 'video'].includes(patch.media_type)) {
+        return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Invalid media type')));
+      }
+      if (patch.title !== undefined) patch.title = String(patch.title || '').trim().slice(0, 120);
       const { data, error } = await supa.from('ads').update(patch).eq('id', id).select().single();
       if (error) return res.status(400).json(errorEnvelope(error));
       await logAdmin(supa, ctx, 'ad_update', 'ad', id, patch);
@@ -288,6 +303,17 @@ export default createHandler(async function handler(req, res) {
       const { laundromat_id, status, reason } = parsed.data;
       const { data, error } = await supa.from('laundromats').update({ verification_status: status }).eq('id', laundromat_id).select().single();
       if (error) return res.status(400).json(errorEnvelope(error));
+      // Approving a listing without coordinates would hide it from "near me".
+      if (status === 'approved' && data && !validLatLng(data.latitude, data.longitude) && data.address) {
+        const loc = await geocode(data.address, { timeoutMs: 3500 });
+        if (loc) {
+          await supa.from('laundromats')
+            .update({ latitude: loc.lat, longitude: loc.lng, updated_at: new Date().toISOString() })
+            .eq('id', laundromat_id);
+          data.latitude = loc.lat;
+          data.longitude = loc.lng;
+        }
+      }
       await logAdmin(supa, ctx, `verification.${status}`, 'laundromat', laundromat_id, { reason: reason || null });
       if (data && data.owner_id) {
         const messages = {
@@ -354,11 +380,34 @@ export default createHandler(async function handler(req, res) {
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
       const { user_id, roles } = parsed.data;
       if (!roles || !roles.length) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'At least one role is required')));
-      await supa.from('user_roles').delete().eq('user_id', user_id);
-      const rows = [...new Set(roles)].map((role) => ({ user_id, role }));
-      const { error } = await supa.from('user_roles').insert(rows);
-      if (error) return res.status(400).json(errorEnvelope(error));
-      await logAdmin(supa, ctx, 'user.roles', 'user', user_id, { roles });
+      const nextRoles = [...new Set(roles)];
+
+      // Never allow the platform to be left without a super admin.
+      const { data: currentRoles } = await supa.from('user_roles').select('role').eq('user_id', user_id);
+      const wasSuper = (currentRoles || []).some((r) => r.role === 'super_admin');
+      if (wasSuper && !nextRoles.includes('super_admin')) {
+        const { count } = await supa.from('user_roles')
+          .select('*', { count: 'exact', head: true })
+          .eq('role', 'super_admin');
+        if ((count || 0) <= 1) {
+          return res.status(400).json(errorEnvelope(new ApiError(
+            'LAST_SUPER_ADMIN',
+            'This is the last super admin. Grant the role to someone else first.',
+          )));
+        }
+      }
+
+      // Add first, then remove: a failed insert must not strip every role.
+      const { error: insertError } = await supa.from('user_roles')
+        .upsert(nextRoles.map((role) => ({ user_id, role })), { onConflict: 'user_id,role', ignoreDuplicates: true });
+      if (insertError) return res.status(400).json(errorEnvelope(insertError));
+      const stale = (currentRoles || []).map((r) => r.role).filter((role) => !nextRoles.includes(role));
+      if (stale.length) {
+        const { error: deleteError } = await supa.from('user_roles')
+          .delete().eq('user_id', user_id).in('role', stale);
+        if (deleteError) return res.status(400).json(errorEnvelope(deleteError));
+      }
+      await logAdmin(supa, ctx, 'user.roles', 'user', user_id, { roles: nextRoles });
       const { data } = await supa.from('profiles').select('*, user_roles(role)').eq('id', user_id).maybeSingle();
       return res.status(200).json(successEnvelope(data));
     }
@@ -366,7 +415,14 @@ export default createHandler(async function handler(req, res) {
     if (action === 'laundromat-update') {
       const parsed = adminLaundromatUpdate.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
-      const { laundromat_id, ...patch } = parsed.data;
+      const { laundromat_id, geocode: shouldGeocode, ...patch } = parsed.data;
+      if (patch.latitude == null && patch.longitude == null && (patch.address || shouldGeocode)) {
+        const address = patch.address || (await supa.from('laundromats').select('address').eq('id', laundromat_id).maybeSingle()).data?.address;
+        if (address) {
+          const loc = await geocode(address, { timeoutMs: 3500 });
+          if (loc) { patch.latitude = loc.lat; patch.longitude = loc.lng; }
+        }
+      }
       const { data, error } = await supa.from('laundromats').update(patch).eq('id', laundromat_id).select().single();
       if (error) return res.status(400).json(errorEnvelope(error));
       await logAdmin(supa, ctx, 'laundromat.update', 'laundromat', laundromat_id, patch);
@@ -389,13 +445,83 @@ export default createHandler(async function handler(req, res) {
       const parsed = adminRefundUpdate.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
       const { refund_id, status, amount } = parsed.data;
+
+      const { data: existingRefund } = await supa.from('refunds').select('*').eq('id', refund_id).maybeSingle();
+      if (!existingRefund) return res.status(404).json(errorEnvelope(new ApiError('NOT_FOUND', 'Refund not found', 404)));
+
+      // Re-applying the same state must not reverse the ledger or restore
+      // store credit twice.
+      if (existingRefund.status === status && amount == null) {
+        return res.status(200).json(successEnvelope(existingRefund));
+      }
+
       const patch = { status };
-      if (amount != null) patch.amount = amount;
+      if (amount != null) patch.amount = round2(amount);
+      if (status === 'processed') patch.processed_at = new Date().toISOString();
       const { data, error } = await supa.from('refunds').update(patch).eq('id', refund_id).select().single();
       if (error) return res.status(400).json(errorEnvelope(error));
       await logAdmin(supa, ctx, `refund.${status}`, 'refund', refund_id, patch);
+
+      const { data: payment } = await supa.from('payments')
+        .select('*').eq('id', data.payment_id).maybeSingle();
+
+      // Processed: reconcile the payment, the booking, the owner ledger and
+      // any store credit applied at checkout. Rejected: put the order back.
+      if (payment && status === 'processed') {
+        const { data: siblings } = await supa.from('refunds')
+          .select('amount, status').eq('payment_id', payment.id).eq('status', 'processed');
+        const refundedTotal = round2((siblings || []).reduce((sum, r) => sum + num(r.amount, 0), 0));
+        const paymentStatus = refundedTotal >= num(payment.amount, 0) ? 'refunded' : 'partially_refunded';
+        await supa.from('payments')
+          .update({ status: paymentStatus, updated_at: new Date().toISOString() })
+          .eq('id', payment.id);
+
+        if (payment.booking_id) {
+          const { data: booking } = await supa.from('bookings')
+            .select('id, customer_id, status').eq('id', payment.booking_id).maybeSingle();
+          if (booking && booking.status !== 'refunded') {
+            await supa.from('bookings')
+              .update({ status: 'refunded', updated_at: new Date().toISOString() })
+              .eq('id', booking.id);
+            await supa.from('booking_status_history')
+              .insert({ booking_id: booking.id, status: 'refunded', actor_id: ctx.user.id, reason: 'Refund processed by admin' });
+          }
+          // Reverse owner earnings/commission recorded at completion.
+          await reverseCompletionLedger(supa, payment.booking_id, 'refund_reversal');
+
+          // Give back store credit that was consumed when the order was paid.
+          const creditApplied = num(payment.metadata && payment.metadata.credit_applied, 0);
+          if (creditApplied > 0 && booking && booking.customer_id) {
+            const { data: profile } = await supa.from('profiles')
+              .select('credit_balance').eq('id', booking.customer_id).maybeSingle();
+            await supa.from('profiles')
+              .update({ credit_balance: round2(num(profile && profile.credit_balance, 0) + creditApplied) })
+              .eq('id', booking.customer_id);
+            await supa.from('credit_events').insert({
+              user_id: booking.customer_id,
+              amount: creditApplied,
+              reason: 'refund_restore',
+              booking_id: payment.booking_id,
+            });
+          }
+        }
+      } else if (payment && status === 'rejected') {
+        await supa.from('payments')
+          .update({ status: 'succeeded', updated_at: new Date().toISOString() })
+          .eq('id', payment.id)
+          .in('status', ['refund_pending', 'partially_refunded']);
+        if (payment.booking_id) {
+          const { data: history } = await supa.from('booking_status_history')
+            .select('status').eq('booking_id', payment.booking_id)
+            .order('created_at', { ascending: false }).limit(2);
+          const previous = (history || []).map((h) => h.status).find((s) => s !== 'refund_pending');
+          await supa.from('bookings')
+            .update({ status: previous || 'completed', updated_at: new Date().toISOString() })
+            .eq('id', payment.booking_id);
+        }
+      }
+
       try {
-        const { data: payment } = await supa.from('payments').select('booking_id').eq('id', data.payment_id).maybeSingle();
         if (payment && payment.booking_id) {
           const { data: booking } = await supa.from('bookings').select('customer_id').eq('id', payment.booking_id).maybeSingle();
           if (booking && booking.customer_id) {

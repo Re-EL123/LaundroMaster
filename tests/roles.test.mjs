@@ -18,16 +18,20 @@ const uuid = '11111111-1111-1111-1111-111111111111';
 const uuid2 = '22222222-2222-2222-2222-222222222222';
 
 test('staffInvite requires a valid laundromat and email', () => {
-  assert.equal(staffInvite.safeParse({ laundromat_id: uuid, email: 'a@b.com', password: 'pass123' }).success, true);
+  assert.equal(staffInvite.safeParse({ laundromat_id: uuid, email: 'a@b.com', password: 'pass1234' }).success, true);
   assert.equal(staffInvite.safeParse({ laundromat_id: 'nope', email: 'a@b.com' }).success, false);
   assert.equal(staffInvite.safeParse({ laundromat_id: uuid, email: 'nope' }).success, false);
+  // Invites may omit a password (the account may already exist), but a supplied
+  // one must meet the 8 character minimum.
+  assert.equal(staffInvite.safeParse({ laundromat_id: uuid, email: 'a@b.com' }).success, true);
+  assert.equal(staffInvite.safeParse({ laundromat_id: uuid, email: 'a@b.com', password: 'short' }).success, false);
 });
 
 test('staffInvite defaults role to staff and rejects unknown roles', () => {
-  const r = staffInvite.safeParse({ laundromat_id: uuid, email: 'a@b.com', password: 'pass123' });
+  const r = staffInvite.safeParse({ laundromat_id: uuid, email: 'a@b.com', password: 'pass1234' });
   assert.equal(r.success, true);
   assert.equal(r.data.member_role, 'staff');
-  assert.equal(staffInvite.safeParse({ laundromat_id: uuid, email: 'a@b.com', password: 'pass123', member_role: 'owner' }).success, false);
+  assert.equal(staffInvite.safeParse({ laundromat_id: uuid, email: 'a@b.com', password: 'pass1234', member_role: 'owner' }).success, false);
 });
 
 test('staffUpdate and staffRemove require a member id', () => {

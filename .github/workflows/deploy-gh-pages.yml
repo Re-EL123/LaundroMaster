@@ -27,6 +27,7 @@ jobs:
           mkdir -p dist
           cp -r apps dist/
           cp -r shared dist/
+          cp sw.js offline.html dist/
           echo 'laundromaster.re-el.co.za' > dist/CNAME
           cat > dist/index.html <<'HTML'
           <!DOCTYPE html>

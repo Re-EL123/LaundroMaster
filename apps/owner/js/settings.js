@@ -1,5 +1,5 @@
 import { api } from '../../../shared/js/api-client.js';
-import { toast, confirmAction, emptyState } from '../../../shared/js/ui.js';
+import { toast, confirmAction, emptyState, badge } from '../../../shared/js/ui.js';
 import { escapeHtml } from '../../../shared/js/format.js';
 import { mountDashboard } from '../../../shared/js/shell.js';
 import { mountBranding } from '../../../shared/js/branding.js';
@@ -54,18 +54,19 @@ import { uploadDocument } from '../../../shared/js/uploads.js';
       list.innerHTML = members.map((m) => {
         const name = (m.profiles && (m.profiles.full_name || m.profiles.email)) || 'Member';
         const biz = (m.laundromats && m.laundromats.name) || '—';
+        const pending = m.invite_status === 'pending';
         return `<article class="card"><div class="card-body flex justify-between items-center">
           <div>
-            <h3 class="card-title">${escapeHtml(name)}</h3>
+            <h3 class="card-title">${escapeHtml(name)} ${pending ? badge('Invite pending', 'warning') : ''}</h3>
             <p class="card-meta">${escapeHtml(m.profiles ? (m.profiles.email || '') : '')}</p>
-            <p class="text-xs text-muted">${escapeHtml(biz)}</p>
+            <p class="text-xs text-muted">${escapeHtml(biz)}${pending ? ' · waiting for them to accept' : ''}</p>
           </div>
           <div class="flex items-center">
-            <select class="input" data-member="${m.id}" data-role>
+            <select class="input" data-member="${m.id}" data-role${pending ? ' disabled' : ''}>
               <option value="staff"${m.member_role === 'staff' ? ' selected' : ''}>Staff</option>
               <option value="manager"${m.member_role === 'manager' ? ' selected' : ''}>Manager</option>
             </select>
-            <button class="btn btn-danger" data-member="${m.id}" data-remove>Remove</button>
+            <button class="btn btn-danger" data-member="${m.id}" data-remove>${pending ? 'Cancel invite' : 'Remove'}</button>
           </div>
         </div></article>`;
       }).join('');
@@ -245,17 +246,21 @@ import { uploadDocument } from '../../../shared/js/uploads.js';
       btn.disabled = true;
       teamMsg.className = 'form-msg';
       try {
-        await api.post('/owner?action=staff-invite', {
+        const result = await api.post('/owner?action=staff-invite', {
           laundromat_id: document.getElementById('inviteBiz').value,
           full_name: document.getElementById('inviteName').value.trim(),
           email: document.getElementById('inviteEmail').value.trim(),
-          password: document.getElementById('invitePassword').value,
+          password: document.getElementById('invitePassword').value || undefined,
           member_role: document.getElementById('inviteRole').value,
         });
-        teamMsg.textContent = 'Team member added.';
+        const pending = Boolean(result.data && result.data.pending);
+        teamMsg.textContent = pending
+          ? 'Invitation sent. They will see it in their profile and must accept it.'
+          : 'Team member added.';
         teamMsg.classList.add('is-success');
         document.getElementById('inviteEmail').value = '';
-        toast('Team member added', 'success');
+        document.getElementById('invitePassword').value = '';
+        toast(pending ? 'Invitation sent' : 'Team member added', 'success');
         loadTeam();
       } catch (err) {
         teamMsg.textContent = (err.error && err.error.message) || err.message || 'Could not add team member.';

@@ -87,18 +87,50 @@ export async function isCustomerSubscriber(supa, userId) {
   return Boolean(sub);
 }
 
-export function computeDeliveryFee(settings, { deliveryRequired = false, pickupRequired = false, hasCustomerPlan = false, extraFee = 0 } = {}) {
-  if (!deliveryRequired && !pickupRequired) return 0;
-  if (hasCustomerPlan && bool(settings.customer_plus_free_delivery, true)) return 0;
-  return round2(num(settings.delivery_fee, 0) + num(extraFee, 0));
+export function computeDeliveryBreakdown(settings, {
+  deliveryRequired = false,
+  pickupRequired = false,
+  hasCustomerPlan = false,
+  extraFee = 0,
+  zoneFee = null,
+} = {}) {
+  if (!deliveryRequired && !pickupRequired) return { total: 0, platform: 0, owner: 0 };
+  if (hasCustomerPlan && bool(settings.customer_plus_free_delivery, true)) {
+    return { total: 0, platform: 0, owner: 0 };
+  }
+  const platform = round2(num(settings.delivery_fee, 0));
+  // A configured delivery zone overrides the flat per-laundromat surcharge.
+  const owner = round2(num(zoneFee != null ? zoneFee : extraFee, 0));
+  return { total: round2(platform + owner), platform, owner };
 }
 
-export function computeCharges({ subtotal, deliveryFee = 0, tax = 0, discount = 0, commissionPercent = 0 }) {
+export function computeDeliveryFee(settings, {
+  deliveryRequired = false,
+  pickupRequired = false,
+  hasCustomerPlan = false,
+  extraFee = 0,
+  zoneFee = null,
+} = {}) {
+  return computeDeliveryBreakdown(settings, {
+    deliveryRequired, pickupRequired, hasCustomerPlan, extraFee, zoneFee,
+  }).total;
+}
+
+export function computeCharges({
+  subtotal,
+  deliveryFee = 0,
+  platformDeliveryFee = null,
+  ownerDeliveryFee = 0,
+  tax = 0,
+  discount = 0,
+  commissionPercent = 0,
+}) {
   const sub = round2(subtotal);
   const total = round2(sub + deliveryFee + tax - discount);
   const commission = round2(sub * (num(commissionPercent, 0) / 100));
-  const platformFee = round2(deliveryFee);
-  const ownerNet = round2(sub - commission);
+  const platformFee = round2(platformDeliveryFee != null ? platformDeliveryFee : deliveryFee);
+  // Owners keep their own delivery surcharge; the platform keeps the base fee.
+  const ownerNet = round2(sub - commission + num(ownerDeliveryFee, 0));
   return { subtotal: sub, total, commission, platformFee, ownerNet };
 }
 
