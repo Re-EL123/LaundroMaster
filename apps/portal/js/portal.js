@@ -179,7 +179,7 @@ forgotForm.addEventListener('submit', async (e) => {
   const msg = document.getElementById('forgotMsg');
   setMsg(msg, '');
   const check = validateForm(forgotForm);
-  if (!check.valid) return failField(check.firstInvalid);
+  if (!check.valid) return failField(check.firstInvalid, check.errors[0].message);
   setLoading(forgotForm, true);
   try {
     await requestPasswordReset(document.getElementById('forgotEmail').value.trim());
@@ -197,7 +197,7 @@ resetForm.addEventListener('submit', async (e) => {
   const msg = document.getElementById('resetMsg');
   setMsg(msg, '');
   const check = validateForm(resetForm);
-  if (!check.valid) return failField(check.firstInvalid);
+  if (!check.valid) return failField(check.firstInvalid, check.errors[0].message);
   const password = document.getElementById('resetPassword').value;
   const confirmField = document.getElementById('resetConfirm');
   if (password !== confirmField.value) {

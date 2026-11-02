@@ -4,7 +4,7 @@
 // several — needs to see whose data they are working in, with the logo they
 // uploaded, without opening the settings page.
 import { loadBranches, branchScope } from './branch.js';
-import { branchAvatar } from './avatar.js';
+import { brandAvatar } from './avatar.js';
 import { escapeHtml } from './format.js';
 import { icon } from './icons.js';
 
@@ -43,7 +43,7 @@ export async function mountWorkspace(target, { role = 'owner' } = {}) {
   el.href = inPages() ? 'settings.html#brandingSection' : 'pages/settings.html#brandingSection';
   el.title = scopeNote ? `${branch.name} — ${meta}` : branch.name;
   el.innerHTML = `
-    ${branchAvatar({ name: branch.name, path: branch.logo_path, size: 32, alt: '' })}
+    ${brandAvatar({ name: branch.name, path: branch.logo_path, size: 32, alt: '' })}
     <span class="identity-text">
       <span class="identity-name">${escapeHtml(branch.name || 'Your business')}</span>
       ${meta ? `<span class="identity-meta">${escapeHtml(meta)}</span>` : ''}
