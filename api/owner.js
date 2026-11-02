@@ -203,7 +203,7 @@ export default createHandler(async function handler(req, res) {
       if (!ownedIds.length) return res.status(200).json(successEnvelope([]));
       const { data, error } = await supa
         .from('laundromat_members')
-        .select('id, laundromat_id, user_id, member_role, invite_status, created_at, laundromats(id, name), profiles!laundromat_members_user_id_fkey(id, full_name, email)')
+        .select('id, laundromat_id, user_id, member_role, invite_status, created_at, laundromats(id, name), profiles!laundromat_members_user_id_fkey(id, full_name, email, avatar_path)')
         .in('laundromat_id', ownedIds)
         .order('created_at', { ascending: false });
       if (error) return res.status(500).json(errorEnvelope(error));

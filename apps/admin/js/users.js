@@ -2,6 +2,7 @@ import { api } from '../../../shared/js/api-client.js';
 import { emptyState, errorState, skeleton, badge, toast } from '../../../shared/js/ui.js';
 import { escapeHtml, formatDate, statusLabel, statusTone } from '../../../shared/js/format.js';
 import { mountDashboard } from '../../../shared/js/shell.js';
+import { avatar } from '../../../shared/js/avatar.js';
 
 const ROLES = ['customer', 'owner', 'staff', 'admin', 'super_admin'];
 
@@ -27,10 +28,13 @@ const ROLES = ['customer', 'owner', 'staff', 'admin', 'super_admin'];
     return `<article class="card" data-id="${u.id}" style="margin-bottom:var(--space-3)">
       <div class="card-body">
         <div class="flex justify-between items-center">
-          <div>
-            <h3 class="card-title">${escapeHtml(u.full_name || '—')}</h3>
-            <p class="text-sm text-muted">${escapeHtml(u.email || '—')} &middot; joined ${formatDate(u.created_at)}</p>
-            <p class="text-sm text-muted">Phone: ${escapeHtml(u.phone || '—')}</p>
+          <div class="identity identity-head">
+            ${avatar({ name: u.full_name || u.email || 'Account', path: u.avatar_path, size: 40 })}
+            <div class="identity-text">
+              <h3 class="card-title">${escapeHtml(u.full_name || '—')}</h3>
+              <p class="text-sm text-muted">${escapeHtml(u.email || '—')} &middot; joined ${formatDate(u.created_at)}</p>
+              <p class="text-sm text-muted">Phone: ${escapeHtml(u.phone || '—')}</p>
+            </div>
           </div>
           ${badge(statusLabel(u.account_status || 'active'), statusTone(suspended ? 'suspended' : 'active'))}
         </div>

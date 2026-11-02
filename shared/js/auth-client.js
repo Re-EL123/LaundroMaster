@@ -2,6 +2,7 @@
 // No Supabase secret is ever needed in the browser.
 
 const STORAGE_KEY = 'lm_session';
+const PROFILE_KEY = 'lm_profile';
 
 // Site base so the same code works on github.io/<repo>/ and on the custom domain root.
 function siteBase() {
@@ -39,7 +40,31 @@ export function setSession(session) {
 
 export function clearSession() {
   localStorage.removeItem(STORAGE_KEY);
+  try { localStorage.removeItem(PROFILE_KEY); } catch { /* ignore */ }
   try { sessionStorage.removeItem('lm_auth_validated'); } catch { /* ignore */ }
+}
+
+/**
+ * The last profile the server confirmed (name, phone, avatar). Cached so the
+ * account menu and avatars can paint from the first frame instead of waiting on
+ * a network round-trip — every shell would otherwise flash a placeholder.
+ * Display only; it is never trusted for authorisation.
+ */
+export function getProfile() {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setProfile(profile) {
+  try {
+    if (profile) localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    else localStorage.removeItem(PROFILE_KEY);
+  } catch { /* private mode */ }
+  return profile || null;
 }
 
 export function getRole() {
@@ -193,6 +218,9 @@ export async function me() {
   // logging the user out.
   if (r.status === 401 || r.status === 403) return null;
   if (!r.ok) throw new Error(`Session check failed (${r.status})`);
+  // Keep the display cache warm and in step with any name/photo change made in
+  // another tab or on another device.
+  if (r.data && r.data.data) setProfile(r.data.data.user);
   return r.data.data;
 }
 

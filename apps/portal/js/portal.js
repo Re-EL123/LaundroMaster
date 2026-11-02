@@ -3,6 +3,7 @@ import {
   requestPasswordReset, resetPassword, consumeAuthRedirect, logout,
 } from '../../../shared/js/auth-client.js';
 import { register as registerServiceWorker, wireInstallButton } from '../../../shared/js/pwa.js';
+import { validateForm, setFieldError, wireLiveValidation } from '../../../shared/js/validate.js';
 
 registerServiceWorker();
 
@@ -106,10 +107,22 @@ function friendly(err) {
   return (err && err.message) || 'Something went wrong. Please try again.';
 }
 
+/* Catch the obvious mistakes before the round-trip, and clear the message as
+   soon as the field is corrected. */
+[loginForm, registerForm, forgotForm, resetForm].forEach(wireLiveValidation);
+
+function failField(field, message, msgEl) {
+  setFieldError(field, message);
+  if (msgEl) setMsg(msgEl, '');
+  field.focus({ preventScroll: false });
+}
+
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = document.getElementById('loginMsg');
   setMsg(msg, '');
+  const check = validateForm(loginForm);
+  if (!check.valid) return failField(check.firstInvalid, check.errors[0].message);
   setLoading(loginForm, true);
   try {
     const session = await login(loginForm.email.value.trim(), loginForm.password.value);
@@ -125,6 +138,8 @@ registerForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = document.getElementById('registerMsg');
   setMsg(msg, '');
+  const check = validateForm(registerForm);
+  if (!check.valid) return failField(check.firstInvalid, check.errors[0].message);
   const accountType = (registerForm.querySelector('input[name="account_type"]:checked') || {}).value || 'customer';
   setLoading(registerForm, true);
   try {
@@ -163,6 +178,8 @@ forgotForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = document.getElementById('forgotMsg');
   setMsg(msg, '');
+  const check = validateForm(forgotForm);
+  if (!check.valid) return failField(check.firstInvalid);
   setLoading(forgotForm, true);
   try {
     await requestPasswordReset(document.getElementById('forgotEmail').value.trim());
@@ -179,10 +196,12 @@ resetForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = document.getElementById('resetMsg');
   setMsg(msg, '');
+  const check = validateForm(resetForm);
+  if (!check.valid) return failField(check.firstInvalid);
   const password = document.getElementById('resetPassword').value;
-  if (password !== document.getElementById('resetConfirm').value) {
-    setMsg(msg, 'Those passwords do not match.', 'error');
-    return;
+  const confirmField = document.getElementById('resetConfirm');
+  if (password !== confirmField.value) {
+    return failField(confirmField, 'Those passwords do not match.');
   }
   setLoading(resetForm, true);
   try {

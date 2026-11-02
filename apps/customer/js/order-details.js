@@ -4,6 +4,7 @@ import { escapeHtml, currency, formatDate, relativeTime, statusLabel, statusTone
 import { mountCustomerHeader, requireCustomer } from '../../../shared/js/chrome.js';
 import { beginPayfastCheckout } from '../../../shared/js/payfast-checkout.js';
 import { pageHref } from './components.js';
+import { brandAvatar } from '../../../shared/js/avatar.js';
 
 mountCustomerHeader('');
 
@@ -116,8 +117,9 @@ function renderBooking(b) {
   out.innerHTML = `
     <article class="card">
       <div class="card-body">
-        <div class="detail-head">
-          <div>
+        <div class="identity identity-head">
+          ${brandAvatar({ name: (b.laundromats && b.laundromats.name) || 'Booking', path: b.laundromats && b.laundromats.logo_path, size: 48 })}
+          <div class="identity-text">
             <h1 class="card-title" style="font-size:1.4rem">${escapeHtml((b.laundromats && b.laundromats.name) || 'Booking')}</h1>
             <p class="text-xs text-muted">Order ${escapeHtml(b.id)} · ${escapeHtml(relativeTime(b.created_at))}</p>
           </div>

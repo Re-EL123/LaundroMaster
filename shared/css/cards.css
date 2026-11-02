@@ -128,7 +128,74 @@
 .chat-line.is-out .chat-body { background: var(--color-primary); color: #fff; }
 
 .profile-avatar { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
-.avatar { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; background: var(--color-surface); border: 1px solid var(--color-border); flex: none; }
+
+/* ---- Avatars ---- */
+/* Sized from a single custom property so the same markup works as a 24px chip
+   in a list and a 72px photo on the profile page. */
+.avatar { width: var(--avatar-size, 72px); height: var(--avatar-size, 72px); border-radius: 50%; object-fit: cover; background: var(--color-surface); border: 1px solid var(--color-border); flex: none; }
+.avatar-square { border-radius: var(--radius-md); }
+.avatar-initials {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--avatar-bg, var(--color-primary)); color: #fff;
+  font-weight: 700; font-size: calc(var(--avatar-size, 72px) * 0.38);
+  line-height: 1; letter-spacing: 0.02em; user-select: none;
+  border-color: transparent;
+}
+
+/* Identity rows (avatars with a name/email beside them). */
+.identity { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.identity-text { display: flex; flex-direction: column; min-width: 0; }
+.identity-name { font-weight: 600; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.identity-meta { font-size: 0.75rem; color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A card header: logo, then name/address, then any badge pushed to the end. */
+.identity-head .identity-text { flex: 1 1 auto; }
+
+/* ---- Account menu ---- */
+.account-menu { position: relative; }
+.account-trigger {
+  display: flex; align-items: center; gap: var(--space-2);
+  max-width: 14rem; padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border); border-radius: var(--radius-pill);
+  background: var(--color-panel); color: var(--color-ink); font: inherit;
+  cursor: pointer; transition: background-color var(--motion-base) ease;
+}
+.account-trigger:hover { background: var(--color-surface); }
+.account-trigger-text { display: flex; flex-direction: column; min-width: 0; text-align: left; }
+.account-trigger-text .identity-name { font-size: 0.85rem; }
+.account-trigger-text .identity-meta { font-size: 0.7rem; }
+.account-caret { color: var(--color-muted); transition: transform var(--motion-base) ease; }
+.account-trigger[aria-expanded="true"] .account-caret { transform: rotate(180deg); }
+
+.account-panel {
+  position: absolute; right: 0; top: calc(100% + var(--space-2)); z-index: 80;
+  min-width: 15rem; display: flex; flex-direction: column; gap: 2px;
+  padding: var(--space-2);
+  background: var(--color-panel); border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-popover);
+}
+.account-panel[hidden] { display: none; }
+.account-head {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2); border-bottom: 1px solid var(--color-border);
+}
+.account-item {
+  display: flex; align-items: center; gap: var(--space-3);
+  width: 100%; padding: var(--space-2) var(--space-3);
+  border: 0; border-radius: var(--radius-md);
+  background: transparent; color: var(--color-ink);
+  font: inherit; text-align: left; text-decoration: none; cursor: pointer;
+}
+.account-item:hover, .account-item:focus-visible { background: var(--color-surface); }
+.account-item .icon { color: var(--color-muted); }
+.account-signout { color: var(--color-danger, var(--color-ink)); }
+.account-signout .icon { color: currentColor; }
+
+/* On a phone the name/role would squeeze the topbar, so show just the avatar. */
+@media (max-width: 720px) {
+  .account-trigger-text { display: none; }
+  .account-panel { min-width: 0; width: min(15rem, calc(100vw - 2 * var(--space-4))); }
+}
 
 /* ---- Charts ---- */
 .chart { position: relative; width: 100%; }

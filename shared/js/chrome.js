@@ -1,13 +1,13 @@
-import { getSession, logout, portalUrl, appUrl } from './auth-client.js';
+import { getSession, portalUrl, appUrl } from './auth-client.js';
 import { escapeHtml } from './format.js';
 import { mountNotifications } from './notifications-ui.js';
+import { mountAccountMenu } from './account.js';
 import { wireInstallButton } from './pwa.js';
 import { initTheme, mountThemeToggle } from './theme.js';
 import { wirePrefetch } from './prefetch.js';
 import { observeEnhancements } from './ui.js';
 import { icon } from './icons.js';
 import { decorateNav, decorateButtons } from './nav.js';
-import { cacheClear } from './cache.js';
 import './components.js';
 
 function customerPaths() {
@@ -19,7 +19,7 @@ function customerPaths() {
     orders: inPages ? 'orders.html' : './pages/orders.html',
     favorites: inPages ? 'favorites.html' : './pages/favorites.html',
     profile: inPages ? 'profile.html' : './pages/profile.html',
-    icon: `${shared}/assets/app-icon.png?v=21`,
+    icon: `${shared}/assets/app-icon.png?v=22`,
   };
 }
 
@@ -91,15 +91,12 @@ export function mountCustomerHeader(active = '') {
 
   const slot = host.querySelector('#authSlot');
   if (user) {
-    slot.className = 'flex';
-    slot.innerHTML = `
-      ${link('Profile', p.profile, 'profile')}
-      <button type="button" class="btn btn-secondary" id="signOutBtn">Sign out</button>`;
-    slot.querySelector('#signOutBtn').addEventListener('click', async (e) => {
-      e.target.disabled = true;
-      cacheClear();
-      await logout();
-      location.href = p.home;
+    // The account menu (avatar, name, links, sign out) replaces the old text-only
+    // "Profile / Sign out" pair so the customer header matches the owner and admin
+    // shells and the signed-in person can see who they are at a glance.
+    mountAccountMenu(slot, {
+      links: [{ label: 'Profile', href: p.profile, icon: 'user' }],
+      signOutTo: p.home,
     });
   } else {
     slot.innerHTML = `<a class="btn btn-primary" href="${portalUrl()}">Sign in</a>`;
@@ -116,7 +113,9 @@ export function mountCustomerHeader(active = '') {
   actions?.appendChild(installBtn);
   if (actions) mountThemeToggle(actions);
 
-  decorateNav(host, '.nav a:not(.btn)');
+  // Account-menu entries are already fully styled; decorating them would wrap
+  // their labels in sidebar flyout markup and break the dropdown.
+  decorateNav(host, '.nav a:not(.btn):not([role="menuitem"])');
   decorateButtons(host);
   mountCustomerNavToggle(host);
   wirePrefetch();

@@ -3,6 +3,7 @@ import { skeleton, emptyState, errorState, badge, toast, confirmAction } from '.
 import { escapeHtml, currency, relativeTime, statusLabel, statusTone, param } from '../../../shared/js/format.js';
 import { mountDashboard } from '../../../shared/js/shell.js';
 import { scoped } from '../../../shared/js/branch.js';
+import { avatar } from '../../../shared/js/avatar.js';
 
 const NEXT_STATUS = {
   accepted: 'collected',
@@ -75,7 +76,18 @@ const SLA_MINUTES = 60;
     } else if (next) {
       actions.push(`<button class="btn btn-primary" data-id="${b.id}" data-status="${next}">${ACTION_LABEL[b.status]}</button>`);
     }
-    const customer = b.customer && b.customer.full_name ? `<p class="card-meta">${escapeHtml(b.customer.full_name)}${b.customer.phone ? ` · ${escapeHtml(b.customer.phone)}` : ''}</p>` : '';
+    const customerName = b.customer && b.customer.full_name;
+    // The API already sends the customer's photo; showing it here means the owner
+    // can recognise a repeat customer at a glance instead of reading every name.
+    const customer = customerName
+      ? `<div class="identity">
+          ${avatar({ name: customerName, path: b.customer.avatar_path, size: 32 })}
+          <div class="identity-text">
+            <span class="identity-name">${escapeHtml(customerName)}</span>
+            ${b.customer.phone ? `<span class="identity-meta">${escapeHtml(b.customer.phone)}</span>` : ''}
+          </div>
+        </div>`
+      : '';
     return `<article class="card" data-booking="${b.id}">
       <div class="card-body">
         <div class="flex justify-between wrap">

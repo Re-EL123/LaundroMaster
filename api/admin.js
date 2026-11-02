@@ -164,14 +164,14 @@ export default createHandler(async function handler(req, res) {
 
     if (action === 'subscriptions') {
       const { data, error } = await supa.from('subscriptions')
-        .select('*, plans(name, code, audience, price_monthly), profiles(id, full_name, email)')
+        .select('*, plans(name, code, audience, price_monthly), profiles(id, full_name, email, avatar_path)')
         .order('created_at', { ascending: false }).limit(200);
       if (error) return res.status(500).json(errorEnvelope(error));
       return res.status(200).json(successEnvelope(data || []));
     }
 
     if (action === 'laundromats' || action === 'verifications') {
-      let request = supa.from('laundromats').select('*, profiles!laundromats_owner_id_fkey(id, full_name, email)').order('created_at', { ascending: false });
+      let request = supa.from('laundromats').select('*, profiles!laundromats_owner_id_fkey(id, full_name, email, avatar_path)').order('created_at', { ascending: false });
       if (action === 'verifications') request = request.in('verification_status', ['pending', 'rejected']);
       if (q.status) request = request.eq('verification_status', q.status);
       const { data, error } = await request;
@@ -208,7 +208,7 @@ export default createHandler(async function handler(req, res) {
 
     if (action === 'payouts') {
       const { data, error } = await supa.from('payouts')
-        .select('*, profiles(id, full_name, email)')
+        .select('*, profiles(id, full_name, email, avatar_path)')
         .order('created_at', { ascending: false }).limit(200);
       if (error) return res.status(500).json(errorEnvelope(error));
       return res.status(200).json(successEnvelope(data || []));
@@ -224,7 +224,7 @@ export default createHandler(async function handler(req, res) {
 
     if (action === 'payments') {
       let request = supa.from('payments')
-        .select('*, bookings(id, status, laundromats(name)), profiles!payments_user_id_fkey(id, full_name, email)')
+        .select('*, bookings(id, status, laundromats(name)), profiles!payments_user_id_fkey(id, full_name, email, avatar_path)')
         .order('created_at', { ascending: false })
         .limit(Math.min(Number(q.limit) || 200, 500));
       if (q.status) request = request.eq('status', q.status);
@@ -244,7 +244,7 @@ export default createHandler(async function handler(req, res) {
     if (action === 'promotions') {
       await reconcilePromotions(supa);
       const { data, error } = await supa.from('promotions')
-        .select('*, laundromats(id, name), profiles(id, full_name, email)')
+        .select('*, laundromats(id, name), profiles(id, full_name, email, avatar_path)')
         .order('created_at', { ascending: false }).limit(200);
       if (error) return res.status(500).json(errorEnvelope(error));
       return res.status(200).json(successEnvelope(data || []));

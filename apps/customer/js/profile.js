@@ -3,27 +3,51 @@ import { toast, badge } from '../../../shared/js/ui.js';
 import { statusLabel, currency, escapeHtml, formatDateOnly } from '../../../shared/js/format.js';
 import { mountCustomerHeader, requireCustomer } from '../../../shared/js/chrome.js';
 import { beginPayfastCheckout } from '../../../shared/js/payfast-checkout.js';
-import { logout, portalUrl } from '../../../shared/js/auth-client.js';
-import { publicUrl } from '../../../shared/js/uploads.js';
+import { logout, portalUrl, getProfile, setProfile } from '../../../shared/js/auth-client.js';
+import { avatar } from '../../../shared/js/avatar.js';
 
 mountCustomerHeader('profile');
 
 const session = requireCustomer();
 const form = document.getElementById('profileForm');
 const msg = document.getElementById('msg');
+const avatarMount = document.getElementById('avatarMount');
+
+// The photo is rendered through the shared avatar component so an account with
+// no picture shows readable initials instead of a broken image.
+let avatarName = '';
+let avatarPath = null;
+
+function renderAvatar(overrideUrl = '') {
+  if (!avatarMount) return;
+  if (overrideUrl) {
+    avatarMount.innerHTML = `<img class="avatar" style="--avatar-size:72px" src="${escapeHtml(overrideUrl)}" alt="Your profile photo" width="72" height="72">`;
+    return;
+  }
+  avatarMount.innerHTML = avatar({ name: avatarName, path: avatarPath, size: 72, alt: 'Your profile photo' });
+}
 
 async function load() {
   if (!session) return;
+  // Paint from the cached profile first so the avatar is there before the
+  // network round-trip finishes.
+  const cached = getProfile();
+  if (cached) { avatarName = cached.full_name || cached.email || ''; avatarPath = cached.avatar_path || null; renderAvatar(); }
   try {
     const { data } = await api.get('/auth?action=me');
     const payload = data.data || data;
     const user = payload.user || payload;
+    // Keep the shell's display cache in step so the header avatar/name update
+    // without a reload.
+    setProfile(user);
     document.getElementById('full_name').value = user.full_name || '';
     document.getElementById('email').value = user.email || '';
     document.getElementById('phone').value = user.phone || '';
     document.getElementById('accountEmail').textContent = user.email || '';
     document.getElementById('roleLabel').textContent = statusLabel(data.role);
-    if (user.avatar_path) document.getElementById('avatarPreview').src = publicUrl('avatars', user.avatar_path);
+    avatarName = user.full_name || user.email || '';
+    avatarPath = user.avatar_path || null;
+    renderAvatar();
   } catch (err) {
     msg.textContent = err.message || 'Failed to load profile.';
     msg.className = 'form-msg is-error';
@@ -37,16 +61,21 @@ if (avatarBtn) {
     const file = e.target.files && e.target.files[0];
     e.target.value = '';
     if (!file) return;
-    const img = document.getElementById('avatarPreview');
+    const localUrl = URL.createObjectURL(file);
+    renderAvatar(localUrl);
     try {
-      img.src = URL.createObjectURL(file);
-      const { uploadImage, publicUrl } = await import('../../../shared/js/uploads.js');
+      const { uploadImage } = await import('../../../shared/js/uploads.js');
       const path = await uploadImage(file, { bucket: 'avatars', prefix: 'avatars' });
       await api.post('/auth?action=update-profile', { avatar_path: path });
-      img.src = publicUrl('avatars', path);
+      avatarPath = path;
+      setProfile({ ...(getProfile() || {}), avatar_path: path });
+      renderAvatar();
       toast('Photo updated', 'success');
     } catch (err) {
+      renderAvatar();
       toast(err.message || 'Upload failed', 'danger');
+    } finally {
+      URL.revokeObjectURL(localUrl);
     }
   });
 }
@@ -56,10 +85,10 @@ form.addEventListener('submit', async (e) => {  e.preventDefault();
   const btn = document.getElementById('saveBtn');
   btn.disabled = true;
   try {
-    await api.post('/auth?action=update-profile', {
-      full_name: document.getElementById('full_name').value.trim(),
-      phone: document.getElementById('phone').value.trim() || null,
-    });
+    const full_name = document.getElementById('full_name').value.trim();
+    const phone = document.getElementById('phone').value.trim() || null;
+    await api.post('/auth?action=update-profile', { full_name, phone });
+    setProfile({ ...(getProfile() || {}), full_name, phone });
     msg.textContent = 'Profile updated.';
     msg.classList.add('is-success');
     toast('Profile updated', 'success');

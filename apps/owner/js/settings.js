@@ -4,8 +4,10 @@ import { escapeHtml } from '../../../shared/js/format.js';
 import { mountDashboard } from '../../../shared/js/shell.js';
 import { mountBranding } from '../../../shared/js/branding.js';
 import { openHoursEditor, openZonesEditor } from '../../../shared/js/operations.js';
-import { uploadDocument } from '../../../shared/js/uploads.js';
+import { uploadDocument, uploadImage } from '../../../shared/js/uploads.js';
 import { branchScope, setBranchScope, invalidateBranches } from '../../../shared/js/branch.js';
+import { avatar } from '../../../shared/js/avatar.js';
+import { getProfile, setProfile } from '../../../shared/js/auth-client.js';
 
 (async function () {
   const user = await mountDashboard({ allowed: ['owner', 'staff', 'admin', 'super_admin'] });
@@ -16,6 +18,57 @@ import { branchScope, setBranchScope, invalidateBranches } from '../../../shared
   const msg = document.getElementById('msg');
   const bizList = document.getElementById('bizList');
 
+  // ---- Account photo ----
+  // Rendered through the shared avatar component so an account without a photo
+  // shows initials rather than an empty frame. The file is public, so customers
+  // see it next to the owner's reviews.
+  const avatarMount = document.getElementById('ownerAvatarMount');
+  let avatarName = '';
+  let avatarPath = null;
+
+  function renderAvatar(overrideUrl = '') {
+    if (!avatarMount) return;
+    if (overrideUrl) {
+      avatarMount.innerHTML = `<img class="avatar" style="--avatar-size:72px" src="${escapeHtml(overrideUrl)}" alt="Your profile photo" width="72" height="72">`;
+      return;
+    }
+    avatarMount.innerHTML = avatar({ name: avatarName, path: avatarPath, size: 72, alt: 'Your profile photo' });
+  }
+
+  // Paint from the cached profile so the photo is there before the fetch lands.
+  const cachedProfile = getProfile();
+  if (cachedProfile) {
+    avatarName = cachedProfile.full_name || cachedProfile.email || '';
+    avatarPath = cachedProfile.avatar_path || null;
+    renderAvatar();
+  }
+
+  const avatarBtn = document.getElementById('ownerAvatarBtn');
+  const avatarInput = document.getElementById('ownerAvatarInput');
+  if (avatarBtn && avatarInput) {
+    avatarBtn.addEventListener('click', () => avatarInput.click());
+    avatarInput.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      const localUrl = URL.createObjectURL(file);
+      renderAvatar(localUrl);
+      try {
+        const path = await uploadImage(file, { bucket: 'avatars', prefix: 'avatars' });
+        await api.post('/auth?action=update-profile', { avatar_path: path });
+        avatarPath = path;
+        setProfile({ ...(getProfile() || {}), avatar_path: path });
+        renderAvatar();
+        toast('Photo updated', 'success');
+      } catch (err) {
+        renderAvatar();
+        toast(err.message || 'Upload failed', 'danger');
+      } finally {
+        URL.revokeObjectURL(localUrl);
+      }
+    });
+  }
+
   const [meRes, laundromatsRes, brandingRes] = await Promise.allSettled([
     api.get('/auth?action=me'),
     isOwner ? api.get('/owner?action=laundromats') : Promise.resolve({ data: [] }),
@@ -25,9 +78,14 @@ import { branchScope, setBranchScope, invalidateBranches } from '../../../shared
   if (meRes.status === 'fulfilled') {
     const envelope = meRes.value;
     const profile = envelope.data || envelope;
-    document.getElementById('full_name').value = (profile.user && profile.user.full_name) || (profile.full_name) || '';
-    document.getElementById('email').value = (profile.user && profile.user.email) || (profile.email) || document.getElementById('email').value || '';
-    document.getElementById('phone').value = (profile.user && profile.user.phone) || (profile.phone) || '';
+    const person = profile.user || profile;
+    document.getElementById('full_name').value = person.full_name || '';
+    document.getElementById('email').value = person.email || document.getElementById('email').value || '';
+    document.getElementById('phone').value = person.phone || '';
+    setProfile(person);
+    avatarName = person.full_name || person.email || '';
+    avatarPath = person.avatar_path || null;
+    renderAvatar();
   } else {
     msg.textContent = (meRes.reason && meRes.reason.message) || 'Failed to load profile.';
     msg.className = 'form-msg is-error';
@@ -374,10 +432,11 @@ import { branchScope, setBranchScope, invalidateBranches } from '../../../shared
     const btn = document.getElementById('saveBtn');
     btn.disabled = true;
     try {
-      await api.post('/auth?action=update-profile', {
-        full_name: document.getElementById('full_name').value.trim(),
-        phone: document.getElementById('phone').value.trim() || null,
-      });
+      const full_name = document.getElementById('full_name').value.trim();
+      const phone = document.getElementById('phone').value.trim() || null;
+      await api.post('/auth?action=update-profile', { full_name, phone });
+      setProfile({ ...(getProfile() || {}), full_name, phone });
+      avatarName = full_name || avatarName;
       msg.textContent = 'Settings saved.';
       msg.classList.add('is-success');
       toast('Settings saved', 'success');

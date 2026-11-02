@@ -3,9 +3,11 @@
 .brand { display: inline-flex; align-items: center; gap: var(--space-2); font-weight: 800; font-size: 1.25rem; color: var(--color-primary); flex: none; margin-right: auto; white-space: nowrap; }
 .brand img { height: 1.75rem; width: 1.75rem; border-radius: var(--radius-sm); display: block; }
 .nav { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-1); }
-.nav a:not(.btn) { padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); color: var(--color-muted); white-space: nowrap; }
-.nav a:not(.btn):hover { background: var(--color-surface); color: var(--color-ink); }
-.nav a:not(.btn).is-active { color: var(--color-primary); background: #fff1f2; }
+/* `.account-item` is excluded: the account dropdown styles its own entries and
+   these rules would otherwise mute them and win on specificity. */
+.nav a:not(.btn):not(.account-item) { padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); color: var(--color-muted); white-space: nowrap; }
+.nav a:not(.btn):not(.account-item):hover { background: var(--color-surface); color: var(--color-ink); }
+.nav a:not(.btn):not(.account-item).is-active { color: var(--color-primary); background: #fff1f2; }
 .header-actions { flex: none; }
 
 .hero { display: flex; flex-direction: column; gap: var(--space-4); padding: clamp(var(--space-6), 5vw, var(--space-10)); background: radial-gradient(circle at top, var(--hero-tint, #fff5f5), var(--color-panel)); border-radius: var(--radius-xl); border: 1px solid var(--color-border); }
@@ -49,7 +51,7 @@ main.page-shell { padding-block: clamp(var(--space-5), 4vw, var(--space-8)); pad
     z-index: 50;
   }
   body.nav-open .app-header .nav { transform: translateX(0); }
-  .app-header .nav a:not(.btn) { padding: var(--space-3); }
+  .app-header .nav a:not(.btn):not(.account-item) { padding: var(--space-3); }
   .app-header .nav .nav-item { width: 100%; }
   .app-header .nav .nav-label { white-space: normal; }
   .app-header .nav #authSlot,

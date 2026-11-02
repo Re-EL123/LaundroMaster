@@ -26,7 +26,7 @@ import { mountDashboard } from '../../../shared/js/shell.js';
     const parts = a.media_path.split('/');
     const url = parts.length > 1 ? publicUrl(parts[0], parts.slice(1).join('/')) : a.media_path;
     const media = a.media_type === 'image'
-      ? `<img src="${url}" alt="" style="max-width:100%;border-radius:8px;margin-bottom:8px">`
+      ? `<img src="${url}" alt="" loading="lazy" decoding="async" style="max-width:100%;border-radius:8px;margin-bottom:8px">`
       : `<video src="${url}" controls style="max-width:100%;border-radius:8px;margin-bottom:8px"></video>`;
     const ctr = a.impressions > 0 ? ((a.clicks / a.impressions) * 100).toFixed(1) : '0.0';
     return `<article class="card"><div class="card-body">

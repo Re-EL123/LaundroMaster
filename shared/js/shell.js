@@ -6,8 +6,9 @@ import { initTheme, mountThemeToggle } from './theme.js';
 import { icon } from './icons.js';
 import { wirePrefetch } from './prefetch.js';
 import { observeEnhancements } from './ui.js';
-import { decorateAll, mountSidebarCollapse } from './nav.js';
+import { decorateAll, mountSidebarCollapse, mountNavFlyouts } from './nav.js';
 import { mountBranchSwitcher, applyScopeToNav, branchScope } from './branch.js';
+import { mountWorkspace } from './workspace.js';
 import './components.js';
 
 function mountNavToggle() {
@@ -91,10 +92,17 @@ export async function mountDashboard({ allowed, sidebarSelector = '.side-nav', b
   if (slot) mountSignOut(slot);
   mountNotifications(document.getElementById('notifMount'), { branchScoped: Boolean(branchScope()) });
 
+  // Whose business is this page showing? The workspace chip answers that with
+  // the logo and name, and doubles as a shortcut into branding settings. It
+  // renders itself once the branch list arrives, so the shell never waits on it.
+  const cluster = slot?.parentElement;
+  if (cluster && ['owner', 'staff', 'manager'].includes(role)) {
+    mountWorkspace(cluster, { role });
+  }
+
   // Multi-branch owners can scope the whole page to one branch. The picker
   // shares a slot with the session controls so it sits in the topbar.
   if (branchSwitcher) {
-    const cluster = slot?.parentElement;
     const bar = (cluster && cluster.classList.contains('flex')) ? cluster : document.querySelector('.topbar .page-shell') || document.querySelector('.topbar');
     mountBranchSwitcher(bar);
   }
@@ -121,6 +129,7 @@ export async function mountDashboard({ allowed, sidebarSelector = '.side-nav', b
   mountNavToggle();
   decorateAll();
   mountSidebarCollapse();
+  mountNavFlyouts();
   wirePrefetch();
   observeEnhancements();
   return user;

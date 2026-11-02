@@ -2,6 +2,7 @@ import { api } from '../../../shared/js/api-client.js';
 import { skeleton, emptyState, errorState, badge, toast, confirmAction } from '../../../shared/js/ui.js';
 import { escapeHtml, formatDate, statusLabel, statusTone } from '../../../shared/js/format.js';
 import { mountDashboard } from '../../../shared/js/shell.js';
+import { avatar, brandAvatar } from '../../../shared/js/avatar.js';
 
 (async function () {
   const user = await mountDashboard({ allowed: ['admin', 'super_admin'] });
@@ -31,12 +32,17 @@ import { mountDashboard } from '../../../shared/js/shell.js';
       <div class="card-body">
         ${badge(statusLabel(l.verification_status), statusTone(l.verification_status))}
         ${unpinned ? badge(l.address ? 'No map pin' : 'No address', 'warning') : ''}
-        <h3 class="card-title">${escapeHtml(l.name)}</h3>
-        <p class="card-meta">${escapeHtml(l.address || 'No address')}</p>
+        <div class="identity identity-head">
+          ${brandAvatar({ name: l.name, path: l.logo_path, size: 40 })}
+          <div class="identity-text">
+            <h3 class="card-title">${escapeHtml(l.name)}</h3>
+            <p class="card-meta">${escapeHtml(l.address || 'No address')}</p>
+          </div>
+        </div>
         ${unpinned ? `<p class="text-xs text-muted">${l.address
           ? 'Hidden from “Near me” until it has coordinates.'
           : 'Invisible in “Near me” — it has no address to map.'}</p>` : ''}
-        ${owner ? `<p class="text-xs text-muted">Owner: ${owner}</p>` : ''}
+        ${owner ? `<div class="identity">${avatar({ name: l.profiles.full_name || l.profiles.email || '', path: l.profiles.avatar_path, size: 28 })}<span class="text-xs text-muted">Owner: ${owner}</span></div>` : ''}
         <p class="text-xs text-muted">Created ${formatDate(l.created_at)}</p>
         <div class="flex wrap">
           <button type="button" class="btn btn-secondary" data-review>Review</button>

@@ -30,7 +30,7 @@ export default createHandler(async function handler(req, res) {
       const ctx = await getUser(req);
       if (!isAdmin(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Admins only', 403)));
       let request = supa.from('reviews')
-        .select('id, rating, review_text, photos, moderation_status, created_at, laundromat_id, booking_id, customer_id, laundromats(id, name), profiles!reviews_customer_id_fkey(full_name, email)')
+        .select('id, rating, review_text, photos, moderation_status, created_at, laundromat_id, booking_id, customer_id, laundromats(id, name), profiles!reviews_customer_id_fkey(full_name, email, avatar_path)')
         .order('created_at', { ascending: false })
         .limit(Math.min(Number(q.limit) || 100, 200));
       if (action === 'pending') request = request.eq('moderation_status', 'pending');
@@ -43,7 +43,7 @@ export default createHandler(async function handler(req, res) {
     if (!q.laundromat_id) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing laundromat_id')));
     const { data, error } = await supa
       .from('reviews')
-      .select('id, rating, review_text, photos, created_at, profiles!reviews_customer_id_fkey(full_name)')
+      .select('id, rating, review_text, photos, created_at, profiles!reviews_customer_id_fkey(full_name, avatar_path)')
       .eq('laundromat_id', q.laundromat_id)
       .eq('moderation_status', 'published')
       .order('created_at', { ascending: false })

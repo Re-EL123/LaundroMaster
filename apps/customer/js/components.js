@@ -1,5 +1,6 @@
 import { escapeHtml, currency } from '../../../shared/js/format.js';
 import { badge } from '../../../shared/js/ui.js';
+import { brandAvatar } from '../../../shared/js/avatar.js';
 
 export function pageHref(file) {
   const inPages = /\/pages\//.test(location.pathname);
@@ -19,11 +20,14 @@ export function laundromatCard(item) {
   const views = Number(item.view_count) > 0 ? `<span class="text-xs text-muted">${Number(item.view_count)} views</span>` : '';
   return `<article class="card">
     <div class="card-body">
-      <div class="flex justify-between wrap">
-        <h3 class="card-title">${escapeHtml(item.name)}</h3>
+      <div class="identity identity-head">
+        ${brandAvatar({ name: item.name, path: item.logo_path, size: 48 })}
+        <div class="identity-text">
+          <h3 class="card-title">${escapeHtml(item.name)}</h3>
+          <p class="card-meta">${escapeHtml(item.address || 'Address not provided')}</p>
+        </div>
         ${featured}
       </div>
-      <p class="card-meta">${escapeHtml(item.address || 'Address not provided')}</p>
       <p class="rating text-sm">${ratingText}</p>
       <p class="flex wrap text-xs">${distance}${views}</p>
       <a class="btn btn-primary" href="${pageHref('laundromat.html')}?id=${encodeURIComponent(item.id)}">View &amp; book</a>

@@ -4,6 +4,7 @@ import { escapeHtml, currency, formatDate, param } from '../../../shared/js/form
 import { mountCustomerHeader, requireCustomer } from '../../../shared/js/chrome.js';
 import { getSession, portalUrl } from '../../../shared/js/auth-client.js';
 import { uploadImage, publicUrl } from '../../../shared/js/uploads.js';
+import { avatar, brandAvatar } from '../../../shared/js/avatar.js';
 import { setMeta, setJsonLd, breadcrumb, compact, absoluteUrl, SITE_URL } from '../../../shared/js/seo.js';
 import { serviceCard } from './components.js';
 
@@ -89,8 +90,9 @@ async function loadBusiness() {
     const stars = `${'\u2605'.repeat(Math.round(rating))}<span class="text-muted">${'\u2606'.repeat(Math.max(0, 5 - Math.round(rating)))}</span>`;
     bizEl.innerHTML = `<article class="card">
       <div class="card-body">
-        <div class="detail-head">
-          <div>
+        <div class="identity identity-head">
+          ${brandAvatar({ name: b.name, path: b.logo_path, size: 64, alt: `${b.name} logo` })}
+          <div class="identity-text">
             <div class="flex wrap">
               <h1 class="card-title" style="font-size:1.6rem">${escapeHtml(b.name)}</h1>
               ${b.is_featured ? badge('Featured', 'warning') : ''}
@@ -142,12 +144,19 @@ async function loadReviews() {
     if (!reviews.length) return emptyState(reviewsEl, 'No reviews yet.');
     reviewsEl.innerHTML = reviews.map((r) => {
       const photos = Array.isArray(r.photos) ? r.photos : [];
+      const author = (r.profiles && r.profiles.full_name) || 'Customer';
       return `<article class="card" style="margin-bottom:var(--space-3)">
       <div class="card-body">
-        <p class="rating">${'\u2605'.repeat(r.rating)}<span class="text-muted">${'\u2606'.repeat(5 - r.rating)}</span></p>
+        <div class="identity identity-head">
+          ${avatar({ name: author, path: r.profiles && r.profiles.avatar_path, size: 36, alt: '' })}
+          <div class="identity-text">
+            <span class="identity-name">${escapeHtml(author)}</span>
+            <span class="identity-meta">${formatDate(r.created_at)}</span>
+          </div>
+          <p class="rating">${'\u2605'.repeat(r.rating)}<span class="text-muted">${'\u2606'.repeat(5 - r.rating)}</span></p>
+        </div>
         <p>${escapeHtml(r.review_text || '')}</p>
         ${photos.length ? `<div class="gallery mt-2">${photos.map((p) => `<span class="gallery-item"><img src="${publicUrl('laundromat-media', p)}" alt="" loading="lazy"></span>`).join('')}</div>` : ''}
-        <p class="text-xs text-muted">${escapeHtml((r.profiles && r.profiles.full_name) || 'Customer')} · ${formatDate(r.created_at)}</p>
       </div>
     </article>`;
     }).join('');

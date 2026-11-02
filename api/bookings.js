@@ -69,7 +69,7 @@ async function scopedLaundromatIds(supa, userId) {
 async function loadBooking(supa, id) {
   const { data, error } = await supa
     .from('bookings')
-    .select('*, laundromats(id, name, address, owner_id), booking_items(*)')
+    .select('*, laundromats(id, name, address, logo_path, owner_id), booking_items(*)')
     .eq('id', id)
     .maybeSingle();
   if (error || !data) throw new ApiError('NOT_FOUND', 'Booking not found', 404);
@@ -284,7 +284,7 @@ export default createHandler(async function handler(req, res) {
 
     let request = supa
       .from('bookings')
-      .select('*, laundromats(id, name, address), booking_items(*), customer:profiles!bookings_customer_id_fkey(full_name, phone)')
+      .select('*, laundromats(id, name, address, logo_path), booking_items(*), customer:profiles!bookings_customer_id_fkey(full_name, phone, avatar_path)')
       .order('created_at', { ascending: false })
       .limit(Math.min(Number(q.limit) || 50, 100));
 

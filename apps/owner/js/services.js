@@ -70,7 +70,7 @@ import { branchScope, scoped, loadBranches } from '../../../shared/js/branch.js'
       if (!services.length) return emptyState(list, 'No services yet. Add your first one.');
       list.innerHTML = services.map((s) => `<article class="card">
         <div class="card-body">
-          ${s.image_path ? `<img class="service-thumb" src="${publicUrl('laundromat-media', s.image_path)}" alt="">` : ''}
+          ${s.image_path ? `<img class="service-thumb" src="${publicUrl('laundromat-media', s.image_path)}" alt="" loading="lazy" decoding="async">` : ''}
           ${badge(s.is_active ? 'active' : 'inactive', s.is_active ? 'success' : 'danger')}
           <h3 class="card-title">${escapeHtml(s.name)}</h3>
           ${showBranch ? `<p class="text-xs text-muted">${escapeHtml(branchNames.get(s.laundromat_id) || 'Branch')}</p>` : ''}

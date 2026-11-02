@@ -3,6 +3,7 @@ import { skeleton, emptyCTA, errorState, badge } from '../../../shared/js/ui.js'
 import { escapeHtml, currency, relativeTime, statusLabel, statusTone } from '../../../shared/js/format.js';
 import { mountCustomerHeader, requireCustomer } from '../../../shared/js/chrome.js';
 import { pageHref } from './components.js';
+import { brandAvatar } from '../../../shared/js/avatar.js';
 
 mountCustomerHeader('orders');
 
@@ -25,8 +26,13 @@ function card(b) {
         ${badge(statusLabel(b.status), statusTone(b.status))}
         <span class="text-xs text-muted">${escapeHtml(relativeTime(b.created_at))}</span>
       </div>
-      <h3 class="card-title">${escapeHtml((b.laundromats && b.laundromats.name) || 'Laundromat')}</h3>
-      <p class="card-meta">${items} item(s) · ${currency(b.total_amount)}${Number(b.delivery_fee) > 0 ? ` · delivery ${currency(b.delivery_fee)}` : ''}</p>
+      <div class="identity identity-head">
+        ${brandAvatar({ name: (b.laundromats && b.laundromats.name) || 'Laundromat', path: b.laundromats && b.laundromats.logo_path, size: 40 })}
+        <div class="identity-text">
+          <h3 class="card-title">${escapeHtml((b.laundromats && b.laundromats.name) || 'Laundromat')}</h3>
+          <p class="card-meta">${items} item(s) · ${currency(b.total_amount)}${Number(b.delivery_fee) > 0 ? ` · delivery ${currency(b.delivery_fee)}` : ''}</p>
+        </div>
+      </div>
       <div class="flex wrap">
         <a class="btn btn-primary" href="order-details.html?id=${encodeURIComponent(b.id)}">${cta}</a>
         ${b.laundromat_id && !unpaid ? `<a class="btn btn-secondary" href="${pageHref('laundromat.html')}?id=${encodeURIComponent(b.laundromat_id)}">Rebook</a>` : ''}

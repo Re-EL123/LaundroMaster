@@ -3,6 +3,7 @@ import { skeleton, emptyState, errorState, toast } from '../../../shared/js/ui.j
 import { escapeHtml } from '../../../shared/js/format.js';
 import { mountCustomerHeader, requireCustomer } from '../../../shared/js/chrome.js';
 import { pageHref } from './components.js';
+import { brandAvatar } from '../../../shared/js/avatar.js';
 
 mountCustomerHeader('favorites');
 
@@ -12,8 +13,13 @@ const list = document.getElementById('list');
 function card(item) {
   return `<article class="card">
     <div class="card-body">
-      <h3 class="card-title">${escapeHtml(item.name)}</h3>
-      <p class="card-meta">${escapeHtml(item.address || 'Address not provided')}</p>
+      <div class="identity identity-head">
+        ${brandAvatar({ name: item.name, path: item.logo_path, size: 40 })}
+        <div class="identity-text">
+          <h3 class="card-title">${escapeHtml(item.name)}</h3>
+          <p class="card-meta">${escapeHtml(item.address || 'Address not provided')}</p>
+        </div>
+      </div>
       <div class="flex">
         <a class="btn btn-primary" href="${pageHref('laundromat.html')}?id=${encodeURIComponent(item.id)}">View</a>
         <button class="btn btn-secondary" data-remove="${item.id}">Remove</button>

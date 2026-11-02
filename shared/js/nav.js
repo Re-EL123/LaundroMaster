@@ -117,6 +117,57 @@ export function mountSidebarCollapse() {
   return { apply, isExpanded: () => expanded };
 }
 
+/**
+ * Keeps the collapsed-rail label popups on screen. The stylesheet centres each
+ * popup on its icon, which is right for most rows but pushes the popup past the
+ * bottom edge for items near the foot of the sidebar (Settings, Expand), and
+ * past the top edge for the first row in a short window. We measure on hover and
+ * nudge it back with a `--flyout-shift` offset the stylesheet folds into its
+ * transform, so no positioning library is needed.
+ */
+export function mountNavFlyouts() {
+  if (typeof window === 'undefined') return null;
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar || sidebar.dataset.flyoutsReady) return null;
+  sidebar.dataset.flyoutsReady = '1';
+
+  const MARGIN = 8;
+  let last = null;
+
+  const clear = (item) => {
+    const flyout = item && item.querySelector('.nav-flyout');
+    if (flyout) flyout.style.removeProperty('--flyout-shift');
+  };
+
+  const clamp = (item) => {
+    // Re-measuring the same row on every mousemove inside the popup would make
+    // the offset jitter, so only the row that just became active is measured.
+    if (item === last) return;
+    clear(last);
+    last = item;
+    const flyout = item.querySelector('.nav-flyout');
+    // Only the collapsed desktop rail renders a popup; in the mobile drawer and
+    // the expanded sidebar it is `display: none` and has no box to measure.
+    if (!flyout || !flyout.offsetParent) return;
+    const rect = flyout.getBoundingClientRect();
+    const below = rect.bottom - (window.innerHeight - MARGIN);
+    const above = MARGIN - rect.top;
+    if (below > 0) flyout.style.setProperty('--flyout-shift', `${-Math.round(below)}px`);
+    else if (above > 0) flyout.style.setProperty('--flyout-shift', `${Math.round(above)}px`);
+  };
+
+  const onPoint = (event) => {
+    const item = event.target.closest && event.target.closest('.side-nav .nav-item');
+    if (item) clamp(item);
+  };
+  sidebar.addEventListener('mouseover', onPoint);
+  sidebar.addEventListener('focusin', onPoint);
+  // A resize or an expand/collapse invalidates whatever offset we applied.
+  window.addEventListener('resize', () => { clear(last); last = null; });
+
+  return { clamp };
+}
+
 // Action buttons get a leading icon based on their label, when one fits.
 const ACTION_ICONS = [
   [/\b(save|update|apply|confirm|approve|accept|verify|complete)\b/i, 'check'],
