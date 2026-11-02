@@ -73,42 +73,72 @@ body.modal-open { overflow: hidden; }
   .side-nav .nav-item:hover .nav-icon .icon, .nav .nav-item:hover .nav-icon .icon { transform: translateX(2px) scale(1.06); }
 }
 
-/* Collapsible sidebar (desktop only) */
+/* Collapsible sidebar (desktop only).
+   The collapsed icon rail is the default state; expanding is opt-in and
+   persisted. While collapsed, hovering or focusing a nav item reveals a
+   clickable popup card with the item's label. */
 .sidebar { display: flex; flex-direction: column; }
 .sidebar-collapse { display: flex; align-items: center; gap: var(--space-3); width: 100%; margin-top: var(--space-4); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-panel); color: var(--color-muted); font: inherit; font-weight: 600; cursor: pointer; transition: background-color var(--motion-base) ease, color var(--motion-base) ease, border-color var(--motion-base) ease; }
 .sidebar-collapse:hover { background: var(--color-surface); color: var(--color-ink); }
 .sidebar-collapse .icon { transition: transform var(--motion-panel) cubic-bezier(0.22, 1, 0.36, 1); }
+.nav-flyout { display: none; }
 @media (max-width: 1023px) { .sidebar-collapse { display: none; } }
 
 @media (min-width: 1024px) {
   body { transition: grid-template-columns var(--motion-panel) cubic-bezier(0.22, 1, 0.36, 1); }
+  body.no-sidebar-motion { transition: none; }
   .sidebar-collapse { margin-top: auto; }
-  body.sidebar-collapsed { grid-template-columns: 4.75rem 1fr; }
-  body.sidebar-collapsed .sidebar { padding-inline: var(--space-2); }
-  body.sidebar-collapsed .brand { display: flex; justify-content: center; }
-  body.sidebar-collapsed .brand-label,
-  body.sidebar-collapsed .side-nav .nav-label,
-  body.sidebar-collapsed .sidebar-collapse .nav-label { display: none; }
-  body.sidebar-collapsed .side-nav .nav-item,
-  body.sidebar-collapsed .sidebar-collapse { justify-content: center; padding-inline: var(--space-2); }
-  body.sidebar-collapsed .side-nav .nav-item::before { left: calc(-1 * var(--space-1)); }
 
-  /* Hover / focus tooltip reveals the label while collapsed */
-  body.sidebar-collapsed .side-nav .nav-item::after {
-    content: attr(data-label);
+  /* ---- Collapsed rail (default) ---- */
+  body:not(.sidebar-expanded) { grid-template-columns: 4.75rem 1fr; }
+  body:not(.sidebar-expanded) .sidebar { padding-inline: var(--space-2); overflow: visible; }
+  body:not(.sidebar-expanded) .brand { display: flex; justify-content: center; }
+  body:not(.sidebar-expanded) .brand-label,
+  body:not(.sidebar-expanded) .sidebar-collapse .nav-label { display: none; }
+  body:not(.sidebar-expanded) .side-nav .nav-item,
+  body:not(.sidebar-expanded) .sidebar-collapse { justify-content: center; padding-inline: var(--space-2); }
+  body:not(.sidebar-expanded) .side-nav .nav-item::before { left: calc(-1 * var(--space-1)); }
+
+  /* Keep the label available to assistive tech while visually hidden. */
+  body:not(.sidebar-expanded) .side-nav .nav-label {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+  }
+
+  /* Invisible bridge keeps the hover alive across the gap to the popup. */
+  body:not(.sidebar-expanded) .side-nav .nav-item::after {
+    content: ''; position: absolute; left: 100%; top: 0; bottom: 0;
+    width: calc(var(--space-3) + var(--space-1));
+  }
+
+  /* Popup lives inside the link, so the whole card is clickable. */
+  body:not(.sidebar-expanded) .side-nav .nav-item .nav-flyout {
+    display: inline-flex; align-items: center;
     position: absolute; left: calc(100% + var(--space-3)); top: 50%;
-    transform: translateY(-50%) translateX(-4px);
-    background: var(--color-ink); color: var(--color-panel);
-    padding: var(--space-1) var(--space-3); border-radius: var(--radius-md);
-    font-size: 0.8rem; font-weight: 600; white-space: nowrap;
+    transform: translateY(-50%) translateX(-8px) scale(0.97);
+    transform-origin: left center;
+    padding: var(--space-2) var(--space-4);
+    background: var(--color-panel); color: var(--color-ink);
+    border: 1px solid var(--color-border); border-radius: var(--radius-md);
     box-shadow: var(--shadow-popover);
+    font-size: 0.85rem; font-weight: 600; white-space: nowrap;
     opacity: 0; visibility: hidden; pointer-events: none;
-    transition: opacity var(--motion-fast) ease, transform var(--motion-fast) ease, visibility var(--motion-fast);
+    transition: opacity var(--motion-fast) ease, transform var(--motion-fast) cubic-bezier(0.22, 1, 0.36, 1), visibility var(--motion-fast);
     z-index: 70;
   }
-  body.sidebar-collapsed .side-nav .nav-item:hover::after,
-  body.sidebar-collapsed .side-nav .nav-item:focus-visible::after {
-    opacity: 1; visibility: visible; transform: translateY(-50%) translateX(0);
+  /* Caret pointing back at the icon. */
+  body:not(.sidebar-expanded) .side-nav .nav-item .nav-flyout::before {
+    content: ''; position: absolute; left: -5px; top: 50%;
+    width: 9px; height: 9px; transform: translateY(-50%) rotate(45deg);
+    background: var(--color-panel);
+    border-left: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border);
+  }
+  body:not(.sidebar-expanded) .side-nav .nav-item:hover,
+  body:not(.sidebar-expanded) .side-nav .nav-item:focus-visible { z-index: 71; }
+  body:not(.sidebar-expanded) .side-nav .nav-item:hover .nav-flyout,
+  body:not(.sidebar-expanded) .side-nav .nav-item:focus-visible .nav-flyout {
+    opacity: 1; visibility: visible; pointer-events: auto;
+    transform: translateY(-50%) translateX(0) scale(1);
   }
 }
 
@@ -118,13 +148,13 @@ body.modal-open { overflow: hidden; }
 
 @media (prefers-reduced-motion: reduce) {
   body { transition: none; }
-  .nav-icon .icon, .sidebar-collapse .icon, .btn .icon { transition: none; }
+  .nav-icon .icon, .sidebar-collapse .icon, .btn .icon, .nav-flyout { transition: none; }
 }
 
 
 /* Responsive enhancements */
 :root { --container-padding: clamp(1rem, 4vw, 2rem); }
-.page-shell { width: min(100% - var(--container-padding), 80rem); }
+.page-shell { width: min(100% - var(--container-padding), 80rem); padding-inline: var(--safe-left) var(--safe-right); }
 .grid { display: grid; gap: clamp(1rem, 3vw, 1.5rem); }
 .card-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
 .toolbar { flex-wrap: wrap; gap: clamp(.75rem, 2vw, 1rem); }
@@ -137,3 +167,52 @@ body.modal-open { overflow: hidden; }
   .table th, .table td { padding: var(--space-2) var(--space-3); font-size: 0.875rem; }
   .section-head { flex-direction: column; align-items: flex-start; gap: var(--space-2); }
 }
+
+/* ---- Responsive hardening (mobile / tablet / desktop) ---- */
+:root { --page-gutter: clamp(1rem, 4vw, 2rem); }
+
+/* Fluid heading scale so long titles never overflow narrow screens. */
+h1 { font-size: clamp(1.35rem, 4.5vw, 2rem); line-height: 1.2; }
+h2 { font-size: clamp(1.1rem, 3.4vw, 1.5rem); line-height: 1.25; }
+h3 { font-size: clamp(1rem, 2.8vw, 1.25rem); }
+
+/* Topbars: allow the title to shrink and wrap instead of pushing actions off-screen. */
+.topbar { display: flex; align-items: center; gap: var(--space-3); row-gap: var(--space-2); padding-block: clamp(var(--space-3), 2vw, var(--space-4)); }
+.topbar h1 { min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
+.topbar .btn, .topbar .notif { flex: none; }
+.topbar-actions, .session-control, .header-actions { flex-wrap: wrap; }
+
+/* Form toolbars collapse to a clean full-width stack on phones.
+   Chip/filter toolbars keep wrapping as a row. */
+@media (max-width: 700px) {
+  .toolbar:has(> .field) { flex-direction: column; align-items: stretch; }
+  .toolbar > .field, .toolbar > .form-field { width: 100%; min-width: 0; }
+  .toolbar .field > .input, .toolbar .field > .select { width: 100%; }
+  .toolbar:has(> .field) > .btn { width: 100%; }
+}
+
+/* Section heads stack cleanly below tablets. */
+@media (max-width: 720px) {
+  .section-head { flex-wrap: wrap; row-gap: var(--space-2); }
+  .section-head > .filter-bar { width: 100%; }
+  /* Let topbar actions wrap below the title instead of overflowing. */
+  .topbar { flex-wrap: wrap; }
+  .topbar .session-control .text-sm { display: none; }
+}
+
+/* Modals become bottom sheets on phones for thumb-friendly actions. */
+@media (max-width: 640px) {
+  .modal-backdrop { padding: 0; align-items: flex-end; }
+  .modal, .modal-lg { width: 100%; margin: auto auto 0; max-height: 92vh; max-height: 92dvh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+  .modal-header, .modal-body, .modal-footer { padding-inline: var(--space-4); }
+  .modal-footer { flex-direction: column; align-items: stretch; }
+  .modal-footer > .btn { width: 100%; }
+}
+
+/* Notched devices: keep fixed chrome inside the safe area. */
+.sidebar { padding-top: max(var(--space-6), var(--safe-top)); padding-bottom: max(var(--space-6), var(--safe-bottom)); padding-left: max(var(--space-6), var(--safe-left)); }
+.nav-backdrop { padding: 0; }
+
+/* Never let media or preformatted content cause horizontal scroll. */
+.table-wrap, .chat-body, pre { max-width: 100%; }
+.chat-body, pre { overflow-wrap: anywhere; }

@@ -4,6 +4,7 @@ import { escapeHtml, currency, formatDate, param } from '../../../shared/js/form
 import { mountCustomerHeader, requireCustomer } from '../../../shared/js/chrome.js';
 import { getSession, portalUrl } from '../../../shared/js/auth-client.js';
 import { uploadImage, publicUrl } from '../../../shared/js/uploads.js';
+import { setMeta, setJsonLd, breadcrumb, compact, absoluteUrl, SITE_URL } from '../../../shared/js/seo.js';
 import { serviceCard } from './components.js';
 
 mountCustomerHeader('');
@@ -39,6 +40,46 @@ function updateSelection() {
   totalEl.textContent = items.length ? `${items.length} service(s) · ${currency(subtotal)}` : '';
 }
 
+// Keeps the document metadata and structured data aligned with the business
+// that was actually loaded, so this page is meaningful to crawlers.
+function applySeo(b) {
+  const pagePath = `/apps/customer/pages/laundromat.html?id=${encodeURIComponent(id)}`;
+  const image = b.logo_path ? publicUrl('laundromat-media', b.logo_path) : `${SITE_URL}/shared/assets/logo.png`;
+  const description = `${b.address ? `${b.name}, ${b.address}.` : `${b.name}.`} ${b.description || 'Book laundry pickup and delivery with LaundroMaster.'}`
+    .replace(/\s+/g, ' ').slice(0, 300);
+
+  setMeta({
+    title: `${b.name} | Laundromat in South Africa | LaundroMaster`,
+    description,
+    canonical: pagePath,
+    image,
+    type: 'website',
+  });
+
+  setJsonLd('ld-breadcrumb', breadcrumb([
+    { name: 'Home', url: '/apps/customer/' },
+    { name: 'Discover laundromats', url: '/apps/customer/pages/discover.html' },
+    { name: b.name, url: pagePath },
+  ]));
+
+  setJsonLd('ld-laundromat', compact({
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    name: b.name,
+    description: b.description,
+    image,
+    telephone: b.phone,
+    address: { '@type': 'PostalAddress', streetAddress: b.address, addressCountry: 'ZA' },
+    geo: (b.latitude != null && b.longitude != null)
+      ? { '@type': 'GeoCoordinates', latitude: Number(b.latitude), longitude: Number(b.longitude) }
+      : undefined,
+    url: absoluteUrl(pagePath),
+    aggregateRating: b.rating_count
+      ? { '@type': 'AggregateRating', ratingValue: Number(b.rating_average) || 0, reviewCount: Number(b.rating_count) }
+      : undefined,
+  }));
+}
+
 async function loadBusiness() {
   if (!id) { errorState(bizEl, 'Missing laundromat id.'); continueBtn.disabled = true; return; }
   skeleton(bizEl, 1, 140);
@@ -62,6 +103,7 @@ async function loadBusiness() {
         ${b.description ? `<p>${escapeHtml(b.description)}</p>` : ''}
       </div>
     </article>`;
+    applySeo(b);
     if (b.is_featured) {
       api.post('/laundromats?action=promotion-click', { laundromat_id: id }).catch(() => {});
     }

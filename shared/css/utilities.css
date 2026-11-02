@@ -14,14 +14,14 @@
 .badge-danger { background: #fee2e2; color: #991b1b; }
 .badge-warning { background: #fef3c7; color: #92400e; }
 .badge-info { background: #dbeafe; color: #1e40af; }
-.toast-host { position: fixed; right: var(--space-4); bottom: var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); z-index: 9999; max-width: min(360px, 90vw); }
+.toast-host { position: fixed; right: max(var(--space-4), var(--safe-right)); bottom: max(var(--space-4), var(--safe-bottom)); display: flex; flex-direction: column; gap: var(--space-2); z-index: 9999; max-width: min(360px, 90vw); }
 .toast { display: flex; align-items: center; gap: var(--space-2); background: #17171B; color: #fff; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); font-size: 0.9rem; opacity: 0; transform: translateY(8px); transition: opacity var(--motion-base) ease, transform var(--motion-base) ease; }
 .toast .icon { flex: none; opacity: 0.95; }
 .toast-in { opacity: 1; transform: none; }
 .toast-success { background: var(--color-success); }
 .toast-danger { background: var(--color-danger); }
 .toast-warning { background: var(--color-warning); }
-.stat-value { font-size: 2rem; font-weight: 800; }
+.stat-value { font-size: clamp(1.5rem, 5vw, 2rem); font-weight: 800; }
 .mt-4 { margin-top: var(--space-4); }
 .mt-6 { margin-top: var(--space-6); }
 
@@ -40,3 +40,23 @@
 .w-full { width: 100%; }
 .plain-list { display: flex; flex-direction: column; gap: var(--space-2); list-style: none; padding: 0; margin: 0; font-size: 0.9rem; }
 .plain-list li { padding: var(--space-2) var(--space-3); background: var(--color-surface); border-radius: var(--radius-md); }
+
+/* ---- Touch-friendly targets on coarse pointers (phones / tablets) ---- */
+@media (pointer: coarse) {
+  .btn { min-height: var(--tap-min); }
+  .btn-sm { min-height: 2.25rem; }
+  .input, .select, .textarea { min-height: var(--tap-min); }
+  .chip { min-height: 2.25rem; display: inline-flex; align-items: center; }
+  .side-nav a, .nav a { min-height: var(--tap-min); display: flex; align-items: center; }
+  .notif-btn, .modal-close, .password-toggle { min-width: var(--tap-min); min-height: var(--tap-min); }
+  .segment span { min-height: var(--tap-min); }
+}
+
+/* Fluid spacing helpers used for section rhythm across breakpoints. */
+.gap-fluid { gap: clamp(var(--space-3), 2.5vw, var(--space-5)); }
+
+/* Keep header actions compact on phones: icon-only install button. */
+@media (max-width: 640px) {
+  .install-app-btn span { display: none; }
+  .install-app-btn { padding-inline: var(--space-3); }
+}

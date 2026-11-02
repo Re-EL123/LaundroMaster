@@ -1,0 +1,16 @@
+# LaundroMaster — https://laundromaster.re-el.co.za
+# Public, indexable pages are the customer app. Dashboards and account pages
+# are private and are excluded from crawling.
+
+User-agent: *
+Allow: /
+Disallow: /apps/admin/
+Disallow: /apps/owner/
+Disallow: /apps/customer/pages/booking.html
+Disallow: /apps/customer/pages/orders.html
+Disallow: /apps/customer/pages/order-details.html
+Disallow: /apps/customer/pages/profile.html
+Disallow: /apps/customer/pages/favorites.html
+Disallow: /offline.html
+
+Sitemap: https://laundromaster.re-el.co.za/sitemap.xml

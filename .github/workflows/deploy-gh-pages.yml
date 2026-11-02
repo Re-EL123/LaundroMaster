@@ -27,20 +27,37 @@ jobs:
           mkdir -p dist
           cp -r apps dist/
           cp -r shared dist/
-          cp sw.js offline.html dist/
+          cp sw.js offline.html robots.txt sitemap.xml dist/
           echo 'laundromaster.re-el.co.za' > dist/CNAME
           cat > dist/index.html <<'HTML'
           <!DOCTYPE html>
-          <html lang="en">
+          <html lang="en-ZA">
           <head>
             <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>LaundroMaster</title>
-            <meta http-equiv="refresh" content="0; url=apps/portal/index.html">
-            <link rel="canonical" href="apps/portal/index.html">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+            <meta name="theme-color" content="#D90429">
+            <title>LaundroMaster | Laundry Pickup &amp; Delivery in South Africa</title>
+            <meta name="description" content="Book laundry pickup and delivery from trusted laundromats near you. Compare prices, ratings and turnaround times on LaundroMaster.">
+            <meta name="robots" content="index, follow, max-image-preview:large">
+            <link rel="canonical" href="https://laundromaster.re-el.co.za/apps/customer/">
+            <meta http-equiv="refresh" content="0; url=apps/customer/">
+            <meta property="og:type" content="website">
+            <meta property="og:site_name" content="LaundroMaster">
+            <meta property="og:title" content="LaundroMaster | Laundry Pickup &amp; Delivery in South Africa">
+            <meta property="og:description" content="Book laundry pickup and delivery from trusted laundromats near you.">
+            <meta property="og:url" content="https://laundromaster.re-el.co.za/apps/customer/">
+            <meta property="og:image" content="https://laundromaster.re-el.co.za/shared/assets/logo.png">
+            <meta property="og:locale" content="en_ZA">
+            <meta name="twitter:card" content="summary_large_image">
+            <meta name="twitter:title" content="LaundroMaster | Laundry Pickup &amp; Delivery">
+            <meta name="twitter:description" content="Book laundry pickup and delivery from trusted laundromats near you.">
+            <meta name="twitter:image" content="https://laundromaster.re-el.co.za/shared/assets/logo.png">
+            <script type="application/ld+json">
+            {"@context":"https://schema.org","@type":"WebSite","name":"LaundroMaster","url":"https://laundromaster.re-el.co.za/apps/customer/","inLanguage":"en-ZA"}
+            </script>
           </head>
           <body>
-            <p>Redirecting to the <a href="apps/portal/index.html">LaundroMaster portal</a>…</p>
+            <p>Redirecting to <a href="apps/customer/">LaundroMaster</a>…</p>
           </body>
           </html>
           HTML

@@ -33,15 +33,15 @@ import { mountDashboard } from '../../../shared/js/shell.js';
       <div class="flex justify-between">${badge(a.placement)} ${badge(a.is_active ? 'active' : 'inactive', a.is_active ? 'success' : 'danger')}</div>
       <h3 class="card-title">${escapeHtml(a.title)}</h3>
       ${media}
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0">
-        <div style="text-align:center"><div style="font-size:1.5rem;font-weight:700">${a.impressions}</div><div class="text-xs text-muted">Impressions</div></div>
-        <div style="text-align:center"><div style="font-size:1.5rem;font-weight:700">${a.clicks}</div><div class="text-xs text-muted">Clicks</div></div>
-        <div style="text-align:center"><div style="font-size:1.5rem;font-weight:700">${ctr}%</div><div class="text-xs text-muted">CTR</div></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:8px;margin:8px 0">
+        <div style="text-align:center;min-width:0"><div style="font-size:1.5rem;font-weight:700">${a.impressions}</div><div class="text-xs text-muted">Impressions</div></div>
+        <div style="text-align:center;min-width:0"><div style="font-size:1.5rem;font-weight:700">${a.clicks}</div><div class="text-xs text-muted">Clicks</div></div>
+        <div style="text-align:center;min-width:0"><div style="font-size:1.5rem;font-weight:700">${ctr}%</div><div class="text-xs text-muted">CTR</div></div>
       </div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-secondary" data-edit="${a.id}">Edit</button>
-        <button class="btn btn-secondary" data-toggle="${a.id}" data-active="${a.is_active}">${a.is_active ? 'Deactivate' : 'Activate'}</button>
-        <button class="btn btn-danger" data-del="${a.id}">Delete</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-secondary" style="flex:1 1 auto" data-edit="${a.id}">Edit</button>
+        <button class="btn btn-secondary" style="flex:1 1 auto" data-toggle="${a.id}" data-active="${a.is_active}">${a.is_active ? 'Deactivate' : 'Activate'}</button>
+        <button class="btn btn-danger" style="flex:1 1 auto" data-del="${a.id}">Delete</button>
       </div>
     </div></article>`;
   }

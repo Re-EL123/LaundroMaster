@@ -93,6 +93,7 @@ export async function mountDashboard({ allowed, sidebarSelector = '.side-nav' } 
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn btn-secondary install-app-btn';
+    btn.setAttribute('aria-label', 'Install app');
     btn.hidden = true;
     btn.innerHTML = `${icon('download', { size: 16 })}<span>Install</span>`;
     actions.appendChild(btn);

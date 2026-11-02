@@ -23,6 +23,45 @@ function customerPaths() {
   };
 }
 
+function mountCustomerNavToggle(host) {
+  const nav = host.querySelector('#customerNav');
+  const toggle = host.querySelector('.nav-toggle');
+  if (!nav || !toggle) return null;
+
+  toggle.innerHTML = icon('menu', { size: 20 });
+
+  const backdrop = document.createElement('button');
+  backdrop.type = 'button';
+  backdrop.className = 'nav-backdrop';
+  backdrop.setAttribute('aria-label', 'Close navigation menu');
+  backdrop.setAttribute('tabindex', '-1');
+  document.body.appendChild(backdrop);
+
+  const desktop = window.matchMedia('(min-width: 1024px)');
+
+  const setOpen = (open) => {
+    document.body.classList.toggle('nav-open', open);
+    document.body.classList.toggle('nav-lock', open);
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.setAttribute('aria-label', open ? 'Close navigation menu' : 'Open navigation menu');
+    if (open) {
+      const first = nav.querySelector('a');
+      if (first) first.focus({ preventScroll: true });
+    } else if (!desktop.matches) {
+      toggle.focus({ preventScroll: true });
+    }
+  };
+
+  const close = () => { if (document.body.classList.contains('nav-open')) setOpen(false); };
+
+  toggle.addEventListener('click', () => setOpen(!document.body.classList.contains('nav-open')));
+  backdrop.addEventListener('click', close);
+  nav.addEventListener('click', (e) => { if (e.target.closest('a')) close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  desktop.addEventListener?.('change', (e) => { if (e.matches) close(); });
+  return { setOpen };
+}
+
 export function mountCustomerHeader(active = '') {
   initTheme();
   const host = document.getElementById('appHeader');
@@ -35,15 +74,17 @@ export function mountCustomerHeader(active = '') {
     `<a href="${href}"${active === key ? ' class="is-active" aria-current="page"' : ''}>${label}</a>`;
 
   host.innerHTML = `
-    <div class="page-shell flex justify-between">
+    <div class="page-shell app-header-inner">
       <a href="${p.home}" class="brand"><img src="${p.icon}" alt="" width="28" height="28">LaundroMaster</a>
-      <nav class="nav flex" aria-label="Primary">
+      <nav class="nav" id="customerNav" aria-label="Primary">
         ${link('Discover', p.discover, 'discover')}
         ${link('Orders', p.orders, 'orders')}
         ${link('Favorites', p.favorites, 'favorites')}
         <span id="notifSlot"></span>
         <span id="authSlot"></span>
       </nav>
+      <div class="flex header-actions"></div>
+      <button type="button" class="btn btn-secondary nav-toggle" aria-label="Open navigation menu" aria-expanded="false" aria-controls="customerNav"></button>
     </div>`;
 
   if (user) mountNotifications(document.getElementById('notifSlot'));
@@ -64,21 +105,20 @@ export function mountCustomerHeader(active = '') {
     slot.innerHTML = `<a class="btn btn-primary" href="${portalUrl()}">Sign in</a>`;
   }
 
+  const actions = host.querySelector('.header-actions');
   const installBtn = document.createElement('button');
   installBtn.type = 'button';
-  installBtn.className = 'btn btn-secondary';
+  installBtn.className = 'btn btn-secondary install-app-btn';
+  installBtn.setAttribute('aria-label', 'Install app');
   installBtn.innerHTML = `${icon('download', { size: 16 })}<span>Install</span>`;
   installBtn.hidden = true;
   wireInstallButton(installBtn);
-
-  const actions = document.createElement('div');
-  actions.className = 'flex header-actions';
-  actions.appendChild(installBtn);
-  mountThemeToggle(actions);
-  host.querySelector('.page-shell')?.appendChild(actions);
+  actions?.appendChild(installBtn);
+  if (actions) mountThemeToggle(actions);
 
   decorateNav(host, '.nav a:not(.btn)');
   decorateButtons(host);
+  mountCustomerNavToggle(host);
   wirePrefetch();
   observeEnhancements();
 }

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-ZA">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -12,7 +12,44 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="LaundroMaster">
   <link rel="manifest" href="../manifest.webmanifest">
-  <title>Discover - LaundroMaster</title>
+  <title>Find Laundromats Near You | Laundry Pickup &amp; Delivery | LaundroMaster</title>
+  <meta name="description" content="Search laundromats near you by suburb, street address or GPS. Compare ratings, prices and turnaround times, then book wash, dry and fold with pickup and delivery.">
+  <meta name="keywords" content="laundromat near me, laundry near me, find a laundromat, laundry pickup and delivery, wash and fold near me, dry cleaning near me, laundry service South Africa">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+  <link rel="canonical" href="https://laundromaster.re-el.co.za/apps/customer/pages/discover.html">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="LaundroMaster">
+  <meta property="og:title" content="Find Laundromats Near You | LaundroMaster">
+  <meta property="og:description" content="Search laundromats near you by suburb, street address or GPS and book pickup and delivery.">
+  <meta property="og:url" content="https://laundromaster.re-el.co.za/apps/customer/pages/discover.html">
+  <meta property="og:image" content="https://laundromaster.re-el.co.za/shared/assets/logo.png">
+  <meta property="og:image:alt" content="LaundroMaster laundromat search">
+  <meta property="og:locale" content="en_ZA">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Find Laundromats Near You | LaundroMaster">
+  <meta name="twitter:description" content="Search laundromats near you and book laundry pickup and delivery.">
+  <meta name="twitter:image" content="https://laundromaster.re-el.co.za/shared/assets/logo.png">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://laundromaster.re-el.co.za/apps/customer/" },
+      { "@type": "ListItem", "position": 2, "name": "Discover laundromats", "item": "https://laundromaster.re-el.co.za/apps/customer/pages/discover.html" }
+    ]
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "name": "Discover laundromats",
+    "url": "https://laundromaster.re-el.co.za/apps/customer/pages/discover.html",
+    "description": "Search and compare laundromats near you by suburb, street address or GPS.",
+    "inLanguage": "en-ZA",
+    "isPartOf": { "@type": "WebSite", "name": "LaundroMaster", "url": "https://laundromaster.re-el.co.za/apps/customer/" }
+  }
+  </script>
   <link rel="stylesheet" href="../../../shared/css/tokens.css?v=20">
   <link rel="stylesheet" href="../../../shared/css/reset.css?v=20">
   <link rel="stylesheet" href="../../../shared/css/layout.css?v=20">
@@ -25,11 +62,11 @@
 </head>
 <body>
   <header class="app-header" id="appHeader"></header>
-  <main class="page-shell" style="padding: var(--space-6) 0;">
+  <main class="page-shell">
     <div id="heroAds" style="margin-bottom:var(--space-4)"></div>
     <h1 class="page-title">Discover</h1>
     <form class="toolbar" id="searchForm">
-      <div class="field" style="flex:1; min-width:220px;">
+      <div class="field search-field">
         <label class="label" for="q">Search</label>
         <div class="place-ac"><input class="input" id="q" name="q" type="search" autocomplete="off" placeholder="Street address, suburb or town"></div>
       </div>

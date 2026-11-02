@@ -1,9 +1,10 @@
 // Progressive UI decoration: Lucide icons for navigation + action buttons,
-// plus a collapsible desktop sidebar with hover tooltips.
+// plus a desktop sidebar that defaults to a collapsed rail and reveals
+// clickable label popups on hover/focus.
 import { icon } from './icons.js';
 import { escapeHtml } from './format.js';
 
-const COLLAPSE_KEY = 'lm_sidebar_collapsed';
+const EXPAND_KEY = 'lm_sidebar_expanded';
 
 // Sidebar / top-nav icon per label (falls back to the href's first word).
 const NAV_ICONS = {
@@ -49,7 +50,8 @@ function decorateLink(a) {
   if (!name || !label) return;
   a.classList.add('nav-item');
   a.setAttribute('data-label', label);
-  a.innerHTML = `<span class="nav-icon">${icon(name, { size: 18 })}</span><span class="nav-label">${escapeHtml(label)}</span>`;
+  // The flyout is a child of the link, so the popup itself is clickable.
+  a.innerHTML = `<span class="nav-icon">${icon(name, { size: 18 })}</span><span class="nav-label">${escapeHtml(label)}</span><span class="nav-flyout" aria-hidden="true">${escapeHtml(label)}</span>`;
 }
 
 /** Adds icons to sidebar (or top-nav) links. */
@@ -63,7 +65,8 @@ function iconSwap(btn, name) {
   if (svg) svg.outerHTML = icon(name, { size: 18 });
 }
 
-/** Adds a desktop-only collapse toggle to the sidebar and restores its state. */
+/** Adds a desktop-only collapse toggle to the sidebar and restores its state.
+ *  The sidebar starts collapsed (icon rail) unless the user chose to expand. */
 export function mountSidebarCollapse() {
   const sidebar = document.querySelector('.sidebar');
   if (!sidebar || sidebar.querySelector('.sidebar-collapse')) return null;
@@ -78,29 +81,38 @@ export function mountSidebarCollapse() {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'sidebar-collapse';
-  btn.innerHTML = `${icon('chevrons-left', { size: 18 })}<span class="nav-label">Collapse</span>`;
+  btn.innerHTML = `${icon('chevrons-right', { size: 18 })}<span class="nav-label">Expand</span>`;
   sidebar.appendChild(btn);
 
-  const apply = (collapsed) => {
-    document.body.classList.toggle('sidebar-collapsed', collapsed);
-    btn.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
-    btn.setAttribute('aria-expanded', String(!collapsed));
-    iconSwap(btn, collapsed ? 'chevrons-right' : 'chevrons-left');
+  const apply = (expanded, { animate = true } = {}) => {
+    // Suppress the grid transition on the very first paint so a restored
+    // "expanded" preference does not animate in on every page load.
+    if (!animate) {
+      document.body.classList.add('no-sidebar-motion');
+      void document.body.offsetWidth;
+      requestAnimationFrame(() => document.body.classList.remove('no-sidebar-motion'));
+    }
+    document.body.classList.toggle('sidebar-expanded', expanded);
+    const label = expanded ? 'Collapse sidebar' : 'Expand sidebar';
+    btn.setAttribute('aria-expanded', String(expanded));
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+    iconSwap(btn, expanded ? 'chevrons-left' : 'chevrons-right');
     const lbl = btn.querySelector('.nav-label');
-    if (lbl) lbl.textContent = collapsed ? 'Expand' : 'Collapse';
-    try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* ignore */ }
+    if (lbl) lbl.textContent = expanded ? 'Collapse' : 'Expand';
+    try { localStorage.setItem(EXPAND_KEY, expanded ? '1' : '0'); } catch { /* ignore */ }
   };
 
-  let collapsed = false;
-  try { collapsed = localStorage.getItem(COLLAPSE_KEY) === '1'; } catch { /* ignore */ }
-  apply(collapsed);
+  let expanded = false;
+  try { expanded = localStorage.getItem(EXPAND_KEY) === '1'; } catch { /* ignore */ }
+  apply(expanded, { animate: false });
 
   btn.addEventListener('click', () => {
-    collapsed = !collapsed;
-    apply(collapsed);
+    expanded = !expanded;
+    apply(expanded);
   });
 
-  return { apply, isCollapsed: () => collapsed };
+  return { apply, isExpanded: () => expanded };
 }
 
 // Action buttons get a leading icon based on their label, when one fits.

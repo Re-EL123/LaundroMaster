@@ -1,18 +1,68 @@
-.app-header { background: var(--color-panel); border-bottom: 1px solid var(--color-border); padding: var(--space-4) 0; }
-.brand { display: inline-flex; align-items: center; gap: var(--space-2); font-weight: 800; font-size: 1.25rem; color: var(--color-primary); }
+.app-header { position: sticky; top: 0; z-index: 55; background: var(--color-panel); border-bottom: 1px solid var(--color-border); padding: max(var(--space-4), var(--safe-top)) 0 var(--space-4); }
+.app-header-inner { display: flex; align-items: center; gap: var(--space-2); }
+.brand { display: inline-flex; align-items: center; gap: var(--space-2); font-weight: 800; font-size: 1.25rem; color: var(--color-primary); flex: none; margin-right: auto; white-space: nowrap; }
 .brand img { height: 1.75rem; width: 1.75rem; border-radius: var(--radius-sm); display: block; }
-.nav { flex-wrap: wrap; }
-.nav a:not(.btn) { padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); color: var(--color-muted); }
+.nav { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-1); }
+.nav a:not(.btn) { padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); color: var(--color-muted); white-space: nowrap; }
 .nav a:not(.btn):hover { background: var(--color-surface); color: var(--color-ink); }
 .nav a:not(.btn).is-active { color: var(--color-primary); background: #fff1f2; }
-.hero { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-10); background: radial-gradient(circle at top, var(--hero-tint, #fff5f5), var(--color-panel)); border-radius: var(--radius-xl); border: 1px solid var(--color-border); }
-.search-bar { display: flex; gap: var(--space-3); max-width: 640px; }
-@media (max-width: 640px) { .hero { padding: var(--space-6); } .search-bar { flex-direction: column; } .nav { gap: var(--space-1); } }
+.header-actions { flex: none; }
+
+.hero { display: flex; flex-direction: column; gap: var(--space-4); padding: clamp(var(--space-6), 5vw, var(--space-10)); background: radial-gradient(circle at top, var(--hero-tint, #fff5f5), var(--color-panel)); border-radius: var(--radius-xl); border: 1px solid var(--color-border); }
+.hero h1 { font-size: clamp(1.6rem, 5.5vw, 2.4rem); }
+.search-bar { display: flex; gap: var(--space-3); width: 100%; max-width: 640px; }
+.search-bar .input { width: 100%; }
+@media (max-width: 640px) { .hero { padding: var(--space-6); } .search-bar { flex-direction: column; } }
 .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
 .rating { color: var(--color-warning); font-weight: 600; }
 [data-theme="dark"] { --hero-tint: #2a1114; }
 .page-title { margin-bottom: var(--space-4); }
+/* Page rhythm + notch-safe gutters for all customer pages. */
+main.page-shell { padding-block: clamp(var(--space-5), 4vw, var(--space-8)); padding-inline: max(var(--space-4), var(--safe-left)) max(var(--space-4), var(--safe-right)); }
 .toolbar { display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: flex-end; margin-bottom: var(--space-6); }
 .detail-head { display: flex; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+/* Search field grows on wide screens but never forces horizontal overflow. */
+.search-field { flex: 1 1 auto; min-width: 0; }
 .layout-split { grid-template-columns: 1.4fr 1fr; align-items: start; }
 @media (max-width: 900px) { .layout-split { grid-template-columns: minmax(0,1fr); } }
+
+/* ---- Mobile drawer navigation (customer) ---- */
+@media (max-width: 1023px) {
+  .app-header .brand { font-size: 1.1rem; }
+  .app-header .nav {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(82vw, 320px);
+    flex-direction: column;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    gap: var(--space-1);
+    padding: calc(5.5rem + var(--safe-top)) max(var(--space-4), var(--safe-right)) max(var(--space-6), var(--safe-bottom)) max(var(--space-4), var(--safe-left));
+    background: var(--color-panel);
+    border-left: 1px solid var(--color-border);
+    box-shadow: var(--shadow-popover);
+    transform: translateX(102%);
+    transition: transform var(--motion-panel) cubic-bezier(0.22, 1, 0.36, 1);
+    overflow-y: auto;
+    z-index: 50;
+  }
+  body.nav-open .app-header .nav { transform: translateX(0); }
+  .app-header .nav a:not(.btn) { padding: var(--space-3); }
+  .app-header .nav .nav-item { width: 100%; }
+  .app-header .nav .nav-label { white-space: normal; }
+  .app-header .nav #authSlot,
+  .app-header .nav .flex { flex-direction: column; align-items: stretch; gap: var(--space-2); }
+  .app-header .nav .btn { width: 100%; }
+  .app-header .notif-panel { right: 0; left: auto; width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-header .nav { transition: none; }
+}
+
+@media (max-width: 400px) {
+  .app-header .brand { font-size: 1rem; }
+  .app-header .brand img { height: 1.5rem; width: 1.5rem; }
+}
