@@ -6,14 +6,18 @@
 //
 // Configuration:
 //   RESEND_API_KEY      (EMAIL_PROVIDER_API_KEY also accepted) — required to send
-//   EMAIL_FROM          e.g. "LaundroMaster <no-reply@laundromaster.re-el.co.za>"
+//   EMAIL_FROM          e.g. "LaundroMaster <no-reply@re-el.co.za>"
+//                       Must be a domain verified in Resend. The app's web
+//                       domain (laundromaster.re-el.co.za) is a CNAME to GitHub
+//                       Pages and cannot host the DKIM/SPF records Resend needs,
+//                       so mail must be sent from the verified apex domain.
 //   PUBLIC_APP_URL      public origin of the frontend, used for links and images
 
 import { appBase } from './req.js';
 import { adminClient } from './supabase-admin.js';
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
-const DEFAULT_FROM = 'LaundroMaster <no-reply@laundromaster.re-el.co.za>';
+const DEFAULT_FROM = 'LaundroMaster <no-reply@re-el.co.za>';
 
 const BRAND = {
   name: 'LaundroMaster',

@@ -99,6 +99,7 @@ function friendly(err) {
   }
   if (raw.includes('email not confirmed')) return 'Please confirm your email address, then sign in.';
   if (raw.includes('password') && raw.includes('6')) return 'Passwords must be at least 6 characters.';
+  if (raw.includes('phone')) return 'Please enter a valid phone number.';
   if (raw.includes('failed to fetch') || raw.includes('networkerror')) {
     return 'Network error. Check your connection and try again.';
   }
@@ -131,6 +132,7 @@ registerForm.addEventListener('submit', async (e) => {
       email: document.getElementById('regEmail').value.trim(),
       password: document.getElementById('regPassword').value,
       full_name: document.getElementById('regName').value.trim(),
+      phone: document.getElementById('regPhone').value.trim(),
       account_type: accountType,
       ref: new URLSearchParams(location.search).get('ref') || undefined,
     });

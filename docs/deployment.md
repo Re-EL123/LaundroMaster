@@ -17,7 +17,10 @@ PAYFAST_MODE=test            # test | live
 PAYFAST_BASE_URL=https://www.payfast.co.za
 # Resend (https://resend.com/api-keys)
 RESEND_API_KEY=
-EMAIL_FROM=LaundroMaster <no-reply@laundromaster.re-el.co.za>
+# Must be on a domain verified in Resend (see step 3). Do not use
+# laundromaster.re-el.co.za — it is a CNAME to GitHub Pages and cannot be
+# verified for sending.
+EMAIL_FROM=LaundroMaster <no-reply@re-el.co.za>
 APP_BASE_URL=https://laundromaster.re-el.co.za
 PUBLIC_APP_URL=https://laundromaster.re-el.co.za
 API_PUBLIC_URL=https://laundromaster-sable.vercel.app

@@ -18,6 +18,7 @@ const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8, 'Use at least 8 characters'),
   full_name: z.string().min(2).optional(),
+  phone: z.string().trim().min(7, 'Enter a valid phone number').max(30),
   account_type: z.enum(['customer', 'owner']).default('customer'),
   ref: z.string().max(20).optional(),
 });
@@ -42,18 +43,22 @@ async function resolveRole(admin, userId) {
 // Provision a *confirmed* account. Called on registration only when Supabase
 // returns a session (email confirmation disabled) and on every successful
 // login, so unconfirmed sign-ups never receive roles or a laundromat.
-async function provisionUser(admin, user, { accountType = 'customer', fullName, ref } = {}) {
+async function provisionUser(admin, user, { accountType = 'customer', fullName, phone, ref } = {}) {
   if (!admin || !user || !user.id) return;
 
   const type = user.user_metadata?.account_type || accountType || 'customer';
   const name = fullName || user.user_metadata?.full_name || null;
+  const tel = phone || user.user_metadata?.phone || null;
 
-  await admin.from('profiles').upsert({
+  const profile = {
     id: user.id,
     email: user.email,
     full_name: name,
     account_status: 'active',
-  }, { onConflict: 'id' });
+  };
+  if (tel) profile.phone = tel;
+
+  await admin.from('profiles').upsert(profile, { onConflict: 'id' });
 
   const roles = ['customer'];
   if (type === 'owner') roles.push('owner');
@@ -98,14 +103,14 @@ async function provisionUser(admin, user, { accountType = 'customer', fullName, 
 
 // Confirm a new account with a link we mail ourselves, so the message is
 // branded and not subject to Supabase's shared SMTP rate limits.
-async function sendConfirmationEmail(admin, { email, password, full_name, account_type, ref }) {
+async function sendConfirmationEmail(admin, { email, password, full_name, phone, account_type, ref }) {
   try {
     const { data, error } = await admin.auth.admin.generateLink({
       type: 'signup',
       email,
       password,
       options: {
-        data: { full_name, account_type, ref: ref || null },
+        data: { full_name, phone, account_type, ref: ref || null },
         redirectTo: portalRedirect(),
       },
     });
@@ -167,7 +172,7 @@ export default createHandler(async function handler(req, res) {
     if (action === 'register') {
       const parsed = registerSchema.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
-      const { email, password, full_name, account_type, ref } = parsed.data;
+      const { email, password, full_name, phone, account_type, ref } = parsed.data;
       await enforceRateLimit(admin, req, 'register-ip', { limit: 10, windowSeconds: 3600 });
       await enforceRateLimit(admin, req, 'register-email', { limit: 3, windowSeconds: 3600, identifier: email.toLowerCase() });
 
@@ -175,7 +180,7 @@ export default createHandler(async function handler(req, res) {
       // confirmation link ourselves: branded, and not queued behind Supabase's
       // shared SMTP.
       if (emailConfigured()) {
-        const sent = await sendConfirmationEmail(admin, { email, password, full_name, account_type, ref });
+        const sent = await sendConfirmationEmail(admin, { email, password, full_name, phone, account_type, ref });
         if (sent.ok) {
           return res.status(201).json(successEnvelope({
             user: sent.user ? { id: sent.user.id, email: sent.user.email } : null,
@@ -187,6 +192,9 @@ export default createHandler(async function handler(req, res) {
         // The account exists but the mail did not go out. Falling through to
         // signUp() would silently do nothing for an existing user, so say so.
         if (sent.created) {
+          // The response is deliberately generic; log the provider's actual
+          // complaint so the failure can be traced by request id.
+          console.error(`[${req.requestId}] confirmation email failed for ${email}:`, sent.error);
           return res.status(502).json(errorEnvelope(new ApiError(
             'EMAIL_SEND_FAILED',
             'Your account was created but the confirmation email could not be sent. Use "Forgot password" to request a new link.',
@@ -200,7 +208,7 @@ export default createHandler(async function handler(req, res) {
       const { data, error } = await anon.auth.signUp({
         email,
         password,
-        options: { data: { full_name, account_type, ref: ref || null } },
+        options: { data: { full_name, phone, account_type, ref: ref || null } },
       });
       if (error) return res.status(400).json(errorEnvelope(new ApiError('REGISTRATION_FAILED', error.message)));
 
@@ -208,7 +216,7 @@ export default createHandler(async function handler(req, res) {
       // registered; do not leak that or provision anything.
       const isNewUser = Boolean(data.user && Array.isArray(data.user.identities) && data.user.identities.length > 0);
       if (isNewUser && data.session) {
-        await provisionUser(admin, data.user, { accountType: account_type, fullName: full_name, ref });
+        await provisionUser(admin, data.user, { accountType: account_type, fullName: full_name, phone, ref });
       }
       const role = data.user && data.session ? await resolveRole(admin, data.user.id) : account_type;
       return res.status(201).json(successEnvelope({

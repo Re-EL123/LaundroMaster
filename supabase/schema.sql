@@ -355,8 +355,13 @@ begin
   end if;
   safe_role := requested_role;
 
-  insert into public.profiles (id, full_name, email)
-  values (new.id, new.raw_user_meta_data->>'full_name', new.email)
+  insert into public.profiles (id, full_name, email, phone)
+  values (
+    new.id,
+    new.raw_user_meta_data->>'full_name',
+    new.email,
+    new.raw_user_meta_data->>'phone'
+  )
   on conflict (id) do nothing;
 
   insert into public.user_roles (user_id, role)
