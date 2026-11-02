@@ -97,7 +97,9 @@ async function refreshData() {
     api.get('/owner?action=plan').catch(() => ({ data: null })),
   ]);
 
-  state.branches = laundromats || [];
+  // Archived branches are not part of the live setup journey (restore them from
+  // Settings first), and they do not count against the plan's branch allowance.
+  state.branches = (laundromats || []).filter((b) => b.business_status !== 'archived');
   const requestedBranch = new URLSearchParams(location.search).get('laundromat');
   state.laundromat = state.branches.find((b) => b.id === requestedBranch) || state.branches[0] || null;
 

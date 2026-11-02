@@ -52,7 +52,9 @@ import { beginPayfastCheckout } from '../../../shared/js/payfast-checkout.js';
           ? `You have ${credits.remaining} free promoted listing${credits.remaining === 1 ? '' : 's'} included in your plan this period — otherwise ${currency(promo.price)} for ${promo.days} days.`
           : `${currency(promo.price)} for ${promo.days} days of featured placement at the top of search.`;
       }
-      select.innerHTML = (laundromats || []).map((l) => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
+      select.innerHTML = (laundromats || [])
+        .filter((l) => l.business_status !== 'archived')
+        .map((l) => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
       const s = promo.summary || {};
       const summaryEl = document.getElementById('promoStats');
       if (summaryEl) {

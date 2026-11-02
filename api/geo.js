@@ -168,7 +168,8 @@ export default createHandler(async function handler(req, res) {
   const { data, error } = await supa
     .from('laundromats')
     .select(`${SEARCH_FIELDS}, services(base_price, is_active)`)
-    .eq('verification_status', 'approved');
+    .eq('verification_status', 'approved')
+    .neq('business_status', 'archived');
   if (error) return res.status(500).json(errorEnvelope(error));
 
   const rows = (data || []).map((row) => {

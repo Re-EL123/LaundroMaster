@@ -19,6 +19,23 @@ body { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
 .service-image { width: 100%; height: 140px; object-fit: cover; border-radius: var(--radius-md); margin-bottom: var(--space-2); background: var(--color-surface); }
 .service-thumb { width: 100%; height: 140px; object-fit: cover; border-radius: var(--radius-md); margin-bottom: var(--space-2); background: var(--color-surface); }
 .gallery-add:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.branch-switcher { display: flex; align-items: center; gap: var(--space-1); }
+.branch-switcher-icon { display: inline-flex; color: var(--color-muted); }
+.branch-switcher select { min-width: 9rem; max-width: 15rem; }
+/* A scoped view is highlighted so a filtered list is never mistaken for everything. */
+.branch-switcher.is-scoped select { border-color: var(--color-primary); box-shadow: inset 0 0 0 1px var(--color-primary); font-weight: 600; }
+.branch-clear, .branch-manage { display: inline-flex; align-items: center; justify-content: center; width: 1.9rem; height: 1.9rem; flex: none; border-radius: var(--radius-pill); color: var(--color-muted); }
+.branch-clear { border: 1px solid var(--color-border); background: var(--color-panel); cursor: pointer; }
+.branch-clear:hover { color: var(--color-danger); border-color: var(--color-danger); }
+.branch-manage:hover { color: var(--color-primary); background: var(--color-surface); }
+@media (max-width: 640px) { .branch-switcher select { min-width: 0; max-width: 45vw; } }
+/* Persistent reminder that the page is filtered to one branch. */
+.scope-bar { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-4); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-primary); border-left-width: 3px; border-radius: var(--radius-md); background: #fff1f2; color: var(--color-ink); font-size: 0.9rem; }
+.scope-bar-icon { display: inline-flex; color: var(--color-primary); }
+.scope-bar strong { color: var(--color-primary); }
+.scope-bar-clear { margin-left: auto; padding: 0; border: 0; background: none; color: var(--color-primary); font-size: 0.9rem; font-weight: 600; text-decoration: underline; cursor: pointer; }
+.scope-bar-clear:hover { color: var(--color-ink); }
+[data-theme="dark"] .scope-bar { background: #2A1114; }
 @media (max-width: 1023px) {
   body { grid-template-columns: 1fr; }
   .side-nav { gap: var(--space-1); }

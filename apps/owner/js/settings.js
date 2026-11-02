@@ -5,6 +5,7 @@ import { mountDashboard } from '../../../shared/js/shell.js';
 import { mountBranding } from '../../../shared/js/branding.js';
 import { openHoursEditor, openZonesEditor } from '../../../shared/js/operations.js';
 import { uploadDocument } from '../../../shared/js/uploads.js';
+import { branchScope, setBranchScope, invalidateBranches } from '../../../shared/js/branch.js';
 
 (async function () {
   const user = await mountDashboard({ allowed: ['owner', 'staff', 'admin', 'super_admin'] });
@@ -32,11 +33,81 @@ import { uploadDocument } from '../../../shared/js/uploads.js';
     msg.className = 'form-msg is-error';
   }
 
-  const owned = laundromatsRes.status === 'fulfilled' ? (laundromatsRes.value.data || []) : [];
+  // `all` keeps archived branches (so they can be restored); the rest of the
+  // page only configures live ones.
+  const all = laundromatsRes.status === 'fulfilled' ? (laundromatsRes.value.data || []) : [];
+  const owned = all.filter((l) => l.business_status !== 'archived');
   if (brandingRes.status === 'fulfilled') {
     mountBranding(bizList, brandingRes.value.data);
   } else {
     bizList.innerHTML = '<p class="text-muted text-sm">Could not load laundromats.</p>';
+  }
+
+  function initBranches() {
+    const wrap = document.getElementById('branchList');
+    if (!wrap) return;
+    if (!all.length) {
+      emptyState(wrap, 'No branches yet.');
+      return;
+    }
+    wrap.innerHTML = all.map((l) => {
+      const archived = l.business_status === 'archived';
+      return `<article class="card"><div class="card-body flex justify-between items-center wrap" style="gap:var(--space-3)">
+        <div>
+          <h3 class="card-title">${escapeHtml(l.name || 'Branch')} ${archived ? badge('Archived', 'danger') : ''}</h3>
+          <p class="text-xs text-muted">${escapeHtml(l.verification_status || '')}</p>
+        </div>
+        <div class="flex items-center">
+          <a class="btn btn-secondary btn-sm" href="setup.html?laundromat=${l.id}">Set up</a>
+          ${archived
+            ? `<button class="btn btn-secondary btn-sm" data-branch="${l.id}" data-restore>Restore</button>`
+            : `<button class="btn btn-danger btn-sm" data-branch="${l.id}" data-archive>Archive</button>`}
+        </div>
+      </div></article>`;
+    }).join('');
+  }
+
+  const addBranchBtn = document.getElementById('addBranchBtn');
+  if (addBranchBtn) {
+    addBranchBtn.addEventListener('click', async () => {
+      addBranchBtn.disabled = true;
+      try {
+        const { data } = await api.post('/owner?action=laundromat-create', {});
+        toast('Branch added — let’s set it up', 'success');
+        location.href = `setup.html?laundromat=${data.laundromat.id}`;
+      } catch (err) {
+        toast(err.message || 'Could not add a branch', 'danger');
+        addBranchBtn.disabled = false;
+      }
+    });
+  }
+
+  const branchList = document.getElementById('branchList');
+  if (branchList) {
+    branchList.addEventListener('click', async (e) => {
+      const archiveBtn = e.target.closest('[data-archive]');
+      const restoreBtn = e.target.closest('[data-restore]');
+      const btn = archiveBtn || restoreBtn;
+      if (!btn) return;
+      const id = btn.dataset.branch;
+      const archiving = Boolean(archiveBtn);
+      if (archiving && !confirmAction('Archive this branch? Customers will no longer see it. You can restore it later.')) return;
+      btn.disabled = true;
+      try {
+        await api.post(`/owner?action=${archiving ? 'laundromat-archive' : 'laundromat-restore'}`, { laundromat_id: id });
+        invalidateBranches();
+        // If the page was scoped to this branch, the scope is gone with it.
+        if (archiving && branchScope() === id) setBranchScope(null);
+        toast(archiving ? 'Branch archived' : 'Branch restored', 'success');
+        const { data } = await api.get('/owner?action=laundromats');
+        all.length = 0;
+        all.push(...(data || []));
+        initBranches();
+      } catch (err) {
+        toast(err.message || 'Could not update the branch', 'danger');
+        btn.disabled = false;
+      }
+    });
   }
 
   async function loadTeam() {
@@ -226,6 +297,7 @@ import { uploadDocument } from '../../../shared/js/uploads.js';
   }
 
   if (isOwner) {
+    document.getElementById('branchesSection').hidden = false;
     document.getElementById('brandingSection').hidden = false;
     document.getElementById('teamSection').hidden = false;
     document.getElementById('availabilitySection').hidden = false;
@@ -234,6 +306,7 @@ import { uploadDocument } from '../../../shared/js/uploads.js';
     document.getElementById('inviteBiz').innerHTML = owned
       .map((l) => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
 
+    initBranches();
     loadTeam();
     initCapacity();
     initOperations();

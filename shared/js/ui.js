@@ -17,9 +17,13 @@ export function emptyState(el, message, { icon: iconName = 'inbox' } = {}) {
   el.innerHTML = `<div class="empty-state">${icon(iconName, { size: 30 })}<p class="text-muted">${escapeHtml(message)}</p></div>`;
 }
 
-export function errorState(el, message) {
+// `onRetry` re-runs the caller's load; a dead end with no way back is the
+// fastest way to make a transient failure feel permanent.
+export function errorState(el, message, { onRetry } = {}) {
   if (!el) return;
-  el.innerHTML = `<div class="empty-state is-error">${icon('alert-triangle', { size: 30 })}<p class="error">${escapeHtml(message)}</p></div>`;
+  el.innerHTML = `<div class="empty-state is-error">${icon('alert-triangle', { size: 30 })}<p class="error">${escapeHtml(message)}</p>${onRetry ? '<button type="button" class="btn btn-secondary" data-retry>Try again</button>' : ''}</div>`;
+  const btn = el.querySelector('[data-retry]');
+  if (btn) btn.addEventListener('click', () => { btn.disabled = true; btn.textContent = 'Retrying…'; onRetry(); });
 }
 
 export function badge(text, tone = 'info') {
@@ -34,11 +38,15 @@ export function toast(message, tone = 'info', timeout = 4000) {
     host = document.createElement('div');
     host.id = 'toastHost';
     host.className = 'toast-host';
+    // Announce politely by default; failures escalate to assertive below.
+    host.setAttribute('aria-live', 'polite');
     document.body.appendChild(host);
   }
   const node = document.createElement('div');
   node.className = `toast toast-${tone}`;
-  node.setAttribute('role', 'status');
+  const assertive = tone === 'danger' || tone === 'error';
+  node.setAttribute('role', assertive ? 'alert' : 'status');
+  if (assertive) node.setAttribute('aria-live', 'assertive');
   node.innerHTML = icon(TOAST_ICON[tone] || 'info', { size: 16 });
   const span = document.createElement('span');
   span.textContent = message;
@@ -258,8 +266,23 @@ export function openModal({ title, body, actions = [], size = '', dismissible = 
     if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus({ preventScroll: true });
   }
 
+  function focusables() {
+    return Array.from(dialog.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+      .filter((n) => !n.hasAttribute('hidden'));
+  }
+
   function onKey(e) {
-    if (e.key === 'Escape' && dismissible) { e.preventDefault(); close(); }
+    if (e.key === 'Escape' && dismissible) { e.preventDefault(); close(); return; }
+    // Keep focus inside the dialog (it may be a bottom sheet on phones, where
+    // the rest of the page is visually behind it).
+    if (e.key === 'Tab') {
+      const list = focusables();
+      if (!list.length) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
   }
 
   closeBtn.addEventListener('click', close);

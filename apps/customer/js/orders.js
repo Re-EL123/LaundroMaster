@@ -10,10 +10,15 @@ const session = requireCustomer();
 const list = document.getElementById('list');
 
 const ACTIVE = ['pending_payment', 'pending_acceptance', 'accepted', 'pickup_scheduled', 'collected', 'washing', 'drying', 'ironing', 'ready', 'out_for_delivery', 'refund_pending'];
+// Orders that never reached the laundromat because payment did not complete.
+// Surfaced first so a customer can finish (or retry) instead of losing the order.
+const UNPAID = ['pending_payment', 'payment_failed'];
 
 function card(b) {
   const items = b.booking_items ? b.booking_items.length : 0;
   const active = ACTIVE.includes(b.status);
+  const unpaid = UNPAID.includes(b.status);
+  const cta = unpaid ? (b.status === 'payment_failed' ? 'Retry payment' : 'Complete payment') : 'Track order';
   return `<article class="card">
     <div class="card-body">
       <div class="flex justify-between wrap">
@@ -23,10 +28,10 @@ function card(b) {
       <h3 class="card-title">${escapeHtml((b.laundromats && b.laundromats.name) || 'Laundromat')}</h3>
       <p class="card-meta">${items} item(s) · ${currency(b.total_amount)}${Number(b.delivery_fee) > 0 ? ` · delivery ${currency(b.delivery_fee)}` : ''}</p>
       <div class="flex wrap">
-        <a class="btn btn-primary" href="order-details.html?id=${encodeURIComponent(b.id)}">Track order</a>
-        ${b.laundromat_id ? `<a class="btn btn-secondary" href="${pageHref('laundromat.html')}?id=${encodeURIComponent(b.laundromat_id)}">Rebook</a>` : ''}
+        <a class="btn btn-primary" href="order-details.html?id=${encodeURIComponent(b.id)}">${cta}</a>
+        ${b.laundromat_id && !unpaid ? `<a class="btn btn-secondary" href="${pageHref('laundromat.html')}?id=${encodeURIComponent(b.laundromat_id)}">Rebook</a>` : ''}
       </div>
-      ${active ? '<p class="text-xs text-muted">We will keep you posted as your order progresses.</p>' : ''}
+      ${unpaid ? '<p class="text-xs error">Finish payment to send this order to the laundromat.</p>' : active ? '<p class="text-xs text-muted">We will keep you posted as your order progresses.</p>' : ''}
     </div>
   </article>`;
 }
@@ -44,16 +49,17 @@ async function loadOrders() {
         label: 'Browse laundromats',
       });
     }
-    const active = orders.filter((b) => ACTIVE.includes(b.status));
-    const past = orders.filter((b) => !ACTIVE.includes(b.status));
+    const unpaid = orders.filter((b) => UNPAID.includes(b.status));
+    const active = orders.filter((b) => ACTIVE.includes(b.status) && !UNPAID.includes(b.status));
+    const past = orders.filter((b) => !ACTIVE.includes(b.status) && !UNPAID.includes(b.status));
     const section = (title, rows) => (rows.length
       ? `<div class="section-head mt-6"><h2>${title}</h2><span class="text-sm text-muted">${rows.length}</span></div>
          <div class="card-grid">${rows.map(card).join('')}</div>`
       : '');
-    list.innerHTML = section('Active orders', active) + section('Past orders', past);
+    list.innerHTML = section('Awaiting payment', unpaid) + section('Active orders', active) + section('Past orders', past);
   } catch (err) {
     if (err.status === 401) return;
-    errorState(list, err.message || 'Failed to load orders.');
+    errorState(list, err.message || 'Failed to load orders.', { onRetry: loadOrders });
   }
 }
 

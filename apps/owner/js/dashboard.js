@@ -1,10 +1,11 @@
 import { api } from '../../../shared/js/api-client.js';
 import { escapeHtml, currency, relativeTime, statusLabel, statusTone } from '../../../shared/js/format.js';
-import { badge, emptyState, emptyCTA, statTile, animateCounts, initReveal, openModal } from '../../../shared/js/ui.js';
+import { badge, emptyState, emptyCTA, errorState, statTile, animateCounts, initReveal, openModal } from '../../../shared/js/ui.js';
 import { lineChart, hbarChart, initCharts } from '../../../shared/js/charts.js';
 import { swr, cacheClear, cacheSet } from '../../../shared/js/cache.js';
 import { openHoursEditor, openZonesEditor } from '../../../shared/js/operations.js';
 import { mountDashboard } from '../../../shared/js/shell.js';
+import { scoped, scopeKey } from '../../../shared/js/branch.js';
 
 const FIX_META = {
   profile: { label: 'Edit details', href: 'pages/settings.html' },
@@ -16,8 +17,10 @@ const FIX_META = {
 };
 
 (async function () {
-  const user = await mountDashboard({ allowed: ['owner', 'staff', 'admin', 'super_admin'] });
+  const user = await mountDashboard({ allowed: ['owner', 'staff', 'admin', 'super_admin'], branchSwitcher: true });
   if (!user) return;
+
+  const SCOPE = scopeKey();
 
   const statsEl = document.getElementById('stats');
   const recentEl = document.getElementById('recent');
@@ -45,10 +48,10 @@ const FIX_META = {
   }
 
   async function reloadSetup() {
-    cacheClear('owner:verification');
+    cacheClear(`owner:verification:${SCOPE}`);
     try {
-      const { data } = await api.get('/owner?action=verification');
-      cacheSet('owner:verification', data);
+      const { data } = await api.get(scoped('/owner?action=verification'));
+      cacheSet(`owner:verification:${SCOPE}`, data);
       paintVerification(data);
     } catch { /* keep current view */ }
   }
@@ -170,8 +173,8 @@ const FIX_META = {
     const r = nextRange || range;
     chartEl.innerHTML = '<div class="skeleton" style="height:180px"></div>';
     try {
-      const data = await swr(`owner:analytics:${r}`, async () => {
-        const { data: d } = await api.get(`/owner?action=analytics&range=${r}`);
+      const data = await swr(`owner:analytics:${SCOPE}:${r}`, async () => {
+        const { data: d } = await api.get(scoped(`/owner?action=analytics&range=${r}`));
         return d;
       }, { ttl: 120000, onUpdate: (fresh) => { if (r === range) paintAnalytics(fresh); } });
       if (r !== range) return;
@@ -197,19 +200,19 @@ const FIX_META = {
 
   // Stats + verification + recent in parallel.
   const [statsRes, verifyRes, recentRes] = await Promise.allSettled([
-    swr('owner:stats', async () => (await api.get('/owner?action=stats')).data, { ttl: 60000, onUpdate: paintStats }),
-    swr('owner:verification', async () => (await api.get('/owner?action=verification')).data, { ttl: 60000, onUpdate: paintVerification }),
-    swr('owner:recent', async () => (await api.get('/bookings?limit=6')).data, { ttl: 30000, onUpdate: paintRecent }),
+    swr(`owner:stats:${SCOPE}`, async () => (await api.get(scoped('/owner?action=stats'))).data, { ttl: 60000, onUpdate: paintStats }),
+    swr(`owner:verification:${SCOPE}`, async () => (await api.get(scoped('/owner?action=verification'))).data, { ttl: 60000, onUpdate: paintVerification }),
+    swr(`owner:recent:${SCOPE}`, async () => (await api.get(scoped('/bookings?limit=6'))).data, { ttl: 30000, onUpdate: paintRecent }),
   ]);
 
   if (statsRes.status === 'fulfilled') paintStats(statsRes.value);
-  else statsEl.innerHTML = `<p class="error">${escapeHtml((statsRes.reason && statsRes.reason.message) || 'Failed to load stats.')}</p>`;
+  else errorState(statsEl, (statsRes.reason && statsRes.reason.message) || 'Failed to load stats.', { onRetry: () => location.reload() });
 
   if (verifyRes.status === 'fulfilled') paintVerification(verifyRes.value);
-  else { bannerEl.innerHTML = ''; checklistEl.innerHTML = `<p class="error">${escapeHtml((verifyRes.reason && verifyRes.reason.message) || 'Could not load setup status.')}</p>`; }
+  else { bannerEl.innerHTML = ''; errorState(checklistEl, (verifyRes.reason && verifyRes.reason.message) || 'Could not load setup status.', { onRetry: () => location.reload() }); }
 
   if (recentRes.status === 'fulfilled') paintRecent(recentRes.value);
-  else emptyState(recentEl, 'Could not load bookings.');
+  else errorState(recentEl, 'Could not load bookings.', { onRetry: () => location.reload() });
 
   initReveal(document);
   animateCounts(document);

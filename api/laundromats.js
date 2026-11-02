@@ -33,12 +33,13 @@ export default createHandler(async function handler(req, res) {
       const id = q.id;
       if (!id) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing laundromat id')));
       const ctx = await getUser(req);
-      const { data: biz } = await supa.from('laundromats').select('id, owner_id, verification_status').eq('id', id).maybeSingle();
+      const { data: biz } = await supa.from('laundromats').select('id, owner_id, verification_status, business_status').eq('id', id).maybeSingle();
       if (!biz) return res.status(404).json(errorEnvelope(new ApiError('NOT_FOUND', 'Laundromat not found', 404)));
       const privileged = isAdmin(ctx) || (ctx.user && biz.owner_id === ctx.user.id);
       // Same rule as the detail endpoint above: a listing that is not approved
-      // must not leak its services just because it is addressed differently.
-      if (!privileged && biz.verification_status !== 'approved') {
+      // (or has been archived) must not leak its services just because it is
+      // addressed differently.
+      if (!privileged && (biz.verification_status !== 'approved' || biz.business_status === 'archived')) {
         return res.status(404).json(errorEnvelope(new ApiError('NOT_FOUND', 'Laundromat not found', 404)));
       }
       let request = supa.from('services').select('*').eq('laundromat_id', id).order('base_price', { ascending: true });
@@ -57,7 +58,7 @@ export default createHandler(async function handler(req, res) {
         .eq('user_id', ctx.user.id)
         .order('created_at', { ascending: false });
       if (error) return res.status(500).json(errorEnvelope(error));
-      const items = (data || []).map((row) => row.laundromats).filter(Boolean);
+      const items = (data || []).map((row) => row.laundromats).filter((l) => l && l.business_status !== 'archived');
       return res.status(200).json(successEnvelope(items));
     }
 
@@ -66,7 +67,9 @@ export default createHandler(async function handler(req, res) {
       const { data, error } = await supa.from('laundromats').select('*').eq('id', id).maybeSingle();
       if (error || !data) return res.status(404).json(errorEnvelope(new ApiError('NOT_FOUND', 'Laundromat not found', 404)));
       const ctx = await getUser(req);
-      const visible = data.verification_status === 'approved' || isAdmin(ctx) || (ctx.user && data.owner_id === ctx.user.id);
+      const visible = (data.verification_status === 'approved' && data.business_status !== 'archived')
+        || isAdmin(ctx)
+        || (ctx.user && data.owner_id === ctx.user.id);
       if (!visible) return res.status(404).json(errorEnvelope(new ApiError('NOT_FOUND', 'Laundromat not found', 404)));
       try {
         await supa.from('laundromats').update({ view_count: (Number(data.view_count) || 0) + 1 }).eq('id', id);
@@ -83,6 +86,7 @@ export default createHandler(async function handler(req, res) {
       .from('laundromats')
       .select(select)
       .eq('verification_status', 'approved')
+      .neq('business_status', 'archived')
       .range(offset, offset + limit - 1);
     const term = q.q ? String(q.q).replace(/[,()\\*]/g, ' ').trim().slice(0, 80) : '';
     if (term) request = request.or(`name.ilike.%${term}%,address.ilike.%${term}%,description.ilike.%${term}%`);

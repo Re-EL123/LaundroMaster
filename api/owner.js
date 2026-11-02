@@ -65,9 +65,18 @@ export default createHandler(async function handler(req, res) {
 
   const ctx = await requireRoles(req, ['owner', 'staff', 'admin', 'super_admin']);
 
-  const ids = await memberLaundromatIds(supa, ctx);
+  let ids = await memberLaundromatIds(supa, ctx);
   const ownedIds = await ownerLaundromatIds(supa, ctx);
   const settings = await getSettings(supa);
+
+  // The owner app's branch switcher scopes every read to one branch. Only the
+  // read scope narrows — `ownedIds` stays whole so edits (and restoring an
+  // archived branch) keep working.
+  const scopeId = q.laundromat_id;
+  if (scopeId) {
+    if (!ids.includes(scopeId)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
+    ids = [scopeId];
+  }
 
   if (req.method === 'GET') {
     if (action === 'stats') {
@@ -166,7 +175,7 @@ export default createHandler(async function handler(req, res) {
     if (action === 'verification') {
       if (!ids.length) return res.status(200).json(successEnvelope([]));
       const [{ data: laundromats }, { data: services }, { data: hours }, { data: zones }] = await Promise.all([
-        supa.from('laundromats').select('id, name, verification_status, business_status, is_featured, featured_until, address, phone, description, logo_path').in('id', ids),
+        supa.from('laundromats').select('id, name, verification_status, business_status, is_featured, featured_until, address, phone, description, logo_path').in('id', ids).neq('business_status', 'archived'),
         supa.from('services').select('laundromat_id, is_active').in('laundromat_id', ids),
         supa.from('operating_hours').select('laundromat_id').in('laundromat_id', ids),
         supa.from('delivery_zones').select('laundromat_id').in('laundromat_id', ids),
@@ -228,7 +237,12 @@ export default createHandler(async function handler(req, res) {
     if (action === 'earnings') {
       if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can view earnings', 403)));
       const balance = await ownerBalance(supa, ctx.user.id);
-      if (!ids.length) return res.status(200).json(successEnvelope({ total: 0, by_branch: [], ...balance, transactions: [] }));
+      // `balance` (available / paid out) is deliberately owner-wide: payouts are
+      // taken from the business, not from a single branch. `total` and the
+      // transactions are branch-scoped. Tell the client which is which so the
+      // tiles can say so instead of mixing scopes silently.
+      const scope = { scoped: Boolean(scopeId), scope_name: null };
+      if (!ids.length) return res.status(200).json(successEnvelope({ total: 0, by_branch: [], ...balance, ...scope, transactions: [] }));
       const { data, error } = await supa.from('transactions').select('*').in('laundromat_id', ids).order('created_at', { ascending: false }).limit(100);
       if (error) return res.status(500).json(errorEnvelope(error));
       const txns = (data || []).filter((t) => !String(t.type || '').startsWith('platform_') && !String(t.type || '').startsWith('subscription:'));
@@ -237,6 +251,7 @@ export default createHandler(async function handler(req, res) {
       // (Pro/Chain) can see where the money came from without switching views.
       const { data: branchRows } = await supa.from('laundromats').select('id, name').in('id', ids);
       const nameById = new Map((branchRows || []).map((b) => [b.id, b.name]));
+      if (scopeId) scope.scope_name = nameById.get(scopeId) || 'this branch';
       const sums = new Map();
       for (const t of txns) {
         sums.set(t.laundromat_id, round2((sums.get(t.laundromat_id) || 0) + (Number(t.amount) || 0)));
@@ -244,7 +259,7 @@ export default createHandler(async function handler(req, res) {
       const by_branch = [...sums.entries()]
         .map(([id, amount]) => ({ laundromat_id: id, name: nameById.get(id) || 'Branch', total: amount }))
         .sort((a, b) => b.total - a.total);
-      return res.status(200).json(successEnvelope({ total, by_branch, ...balance, transactions: txns }));
+      return res.status(200).json(successEnvelope({ total, by_branch, ...balance, ...scope, transactions: txns }));
     }
 
     if (action === 'laundromats') {
@@ -265,6 +280,7 @@ export default createHandler(async function handler(req, res) {
       const { data, error } = await supa.from('laundromats')
         .select('id, name, description, address, phone, logo_path, photos, latitude, longitude, verification_status')
         .in('id', ids)
+        .neq('business_status', 'archived')
         .order('name');
       if (error) return res.status(400).json(errorEnvelope(error));
       return res.status(200).json(successEnvelope(data || []));
@@ -354,13 +370,78 @@ export default createHandler(async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
+    if (action === 'laundromat-archive' || action === 'laundromat-restore') {
+      if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can manage branches', 403)));
+      const id = String((body(req) || {}).laundromat_id || '').trim();
+      if (!id) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', 'Missing laundromat_id')));
+      if (!ownedIds.includes(id)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
+
+      if (action === 'laundromat-restore') {
+        // Restoring re-occupies a plan branch slot, so it is subject to the
+        // same allowance as creating one.
+        const plan = await effectiveOwnerPlan(supa, ctx.user.id);
+        const limit = Math.max(1, num(plan && plan.includes_branches, 1));
+        const { data: mine } = await supa.from('laundromats').select('id, business_status').eq('owner_id', ctx.user.id);
+        const liveCount = (mine || []).filter((l) => l.business_status !== 'archived').length;
+        if (liveCount >= limit) {
+          const planName = plan ? plan.name : 'current';
+          return res.status(403).json(errorEnvelope(new ApiError(
+            'PLAN_LIMIT_REACHED',
+            `Your ${planName} plan includes ${limit} branch${limit === 1 ? '' : 'es'}. Upgrade your plan to restore another.`,
+            403,
+          )));
+        }
+        const { data, error } = await supa.from('laundromats')
+          .update({ business_status: 'active', accepting_orders: true, updated_at: new Date().toISOString() })
+          .eq('id', id).select().single();
+        if (error) return res.status(400).json(errorEnvelope(error));
+        return res.status(200).json(successEnvelope({ laundromat: data, restored: true }));
+      }
+
+      // Archiving hides a branch from customers, so it must not strand live
+      // orders or leave the owner with nothing left to run.
+      const { data: open } = await supa.from('bookings')
+        .select('id')
+        .eq('laundromat_id', id)
+        .in('status', ['pending_payment', 'pending_acceptance', 'accepted', 'pickup_scheduled', 'collected', 'washing', 'drying', 'ironing', 'ready', 'out_for_delivery'])
+        .limit(1);
+      if ((open || []).length) {
+        return res.status(409).json(errorEnvelope(new ApiError(
+          'BRANCH_HAS_ACTIVE_ORDERS',
+          'Finish or cancel this branch\u2019s open orders before archiving it.',
+          409,
+        )));
+      }
+      const { data: mine } = await supa.from('laundromats').select('id, business_status').eq('owner_id', ctx.user.id);
+      const liveCount = (mine || []).filter((l) => l.business_status !== 'archived').length;
+      if (liveCount <= 1) {
+        return res.status(400).json(errorEnvelope(new ApiError(
+          'LAST_BRANCH',
+          'You need at least one branch. Add another before archiving this one.',
+          400,
+        )));
+      }
+      const { data, error } = await supa.from('laundromats')
+        .update({
+          business_status: 'archived',
+          accepting_orders: false,
+          is_featured: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id).select().single();
+      if (error) return res.status(400).json(errorEnvelope(error));
+      return res.status(200).json(successEnvelope({ laundromat: data, archived: true }));
+    }
+
     if (action === 'laundromat-create') {
       if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can add branches', 403)));
       // The plan's branch allowance is the real limit — Starter 1, Pro 3, Chain 10.
       const plan = await effectiveOwnerPlan(supa, ctx.user.id);
       const limit = Math.max(1, num(plan && plan.includes_branches, 1));
-      const { data: existing } = await supa.from('laundromats').select('id').eq('owner_id', ctx.user.id);
-      const count = (existing || []).length;
+      const { data: existing } = await supa.from('laundromats').select('id, business_status').eq('owner_id', ctx.user.id);
+      // Archived branches do not occupy a plan slot.
+      const live = (existing || []).filter((l) => l.business_status !== 'archived');
+      const count = live.length;
       if (count >= limit) {
         const planName = plan ? plan.name : 'current';
         return res.status(403).json(errorEnvelope(new ApiError(

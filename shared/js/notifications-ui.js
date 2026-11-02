@@ -24,7 +24,7 @@ function notifyTag(item) {
   return (item && (item.data?.tag || item.type)) || 'lm';
 }
 
-export async function mountNotifications(host) {
+export async function mountNotifications(host, { branchScoped = false } = {}) {
   if (!host) return null;
   const session = getSession();
   if (!session) return null;
@@ -43,6 +43,7 @@ export async function mountNotifications(host) {
         <strong>Notifications</strong>
         <button type="button" class="notif-link" data-act="read-all">Mark all read</button>
       </header>
+      ${branchScoped ? '<p class="notif-scope">Updates from all branches, not just the one in view.</p>' : ''}
       <div class="notif-list" data-list><p class="notif-empty">Loading…</p></div>
       <footer class="notif-prefs">
         <label class="notif-row"><span>Alert sound</span>

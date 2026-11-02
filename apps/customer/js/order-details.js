@@ -53,7 +53,11 @@ function messagesPanel(b) {
 }
 
 async function payNow(bookingId, btn) {
-  if (btn) { btn.disabled = true; btn.textContent = 'Starting secure payment…'; }
+  if (btn) {
+    if (!btn.dataset.label) btn.dataset.label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Starting secure payment…';
+  }
   try {
     const { data } = await api.post('/payments?action=create', { booking_id: bookingId });
     if ((data.checkout && beginPayfastCheckout(data.checkout)) || (data.checkout_url && beginPayfastCheckout(data.checkout_url))) {
@@ -63,7 +67,7 @@ async function payNow(bookingId, btn) {
     load();
   } catch (err) {
     toast(err.message || 'Could not start payment', 'danger');
-    if (btn) { btn.disabled = false; btn.textContent = 'Pay now'; }
+    if (btn) { btn.disabled = false; btn.textContent = btn.dataset.label || 'Pay now'; }
   }
 }
 
@@ -99,7 +103,7 @@ function renderBooking(b) {
   const items = (b.booking_items || []).map((i) => `<li>${escapeHtml(i.service_name_snapshot)} × ${i.quantity} — ${currency(i.line_total)}</li>`).join('');
   const canCancel = CANCELLABLE.includes(b.status);
   const canRefund = REFUNDABLE.includes(b.status) && b.payment && !(b.refund && ['pending', 'approved'].includes(b.refund.status));
-  const canPay = b.status === 'pending_payment';
+  const canPay = b.status === 'pending_payment' || b.status === 'payment_failed';
   const amountDue = Number(b.total_amount) || 0;
 
   const pickup = b.pickup_required ? `<p class="text-sm text-muted">Pickup: ${escapeHtml((b.pickup_address && (b.pickup_address.line1 || b.pickup_address.address)) || '—')}</p>` : '';
@@ -145,7 +149,7 @@ function renderBooking(b) {
         <div class="flex wrap mt-4">
           ${b.laundromat_id ? `<a class="btn btn-secondary" href="${pageHref('laundromat.html')}?id=${encodeURIComponent(b.laundromat_id)}">Rebook</a>` : ''}
           ${b.payment && b.payment.status === 'succeeded' ? '<button class="btn btn-secondary" id="receiptBtn">Receipt</button>' : ''}
-          ${canPay ? `<button class="btn btn-primary" id="payBtn">${amountDue > 0 ? `Pay ${currency(amountDue)}` : 'Complete order'}</button>` : ''}
+          ${canPay ? `<button class="btn btn-primary" id="payBtn">${b.status === 'payment_failed' ? 'Retry payment' : amountDue > 0 ? `Pay ${currency(amountDue)}` : 'Complete order'}</button>` : ''}
           ${canCancel ? '<button class="btn btn-danger" id="cancelBtn">Cancel booking</button>' : ''}
           ${canRefund ? '<button class="btn btn-secondary" id="refundBtn">Request refund</button>' : ''}
         </div>

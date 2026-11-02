@@ -3,9 +3,10 @@ import { skeleton, emptyState, errorState, badge, toast } from '../../../shared/
 import { escapeHtml, currency } from '../../../shared/js/format.js';
 import { mountDashboard } from '../../../shared/js/shell.js';
 import { uploadImage, publicUrl } from '../../../shared/js/uploads.js';
+import { branchScope, scoped, loadBranches } from '../../../shared/js/branch.js';
 
 (async function () {
-  const user = await mountDashboard({ allowed: ['owner', 'admin', 'super_admin'] });
+  const user = await mountDashboard({ allowed: ['owner', 'admin', 'super_admin'], branchSwitcher: true });
   if (!user) return;
 
   const list = document.getElementById('list');
@@ -14,7 +15,13 @@ import { uploadImage, publicUrl } from '../../../shared/js/uploads.js';
   const msg = document.getElementById('msg');
   const netCalc = document.getElementById('netCalc');
   const priceInput = document.getElementById('base_price');
-  let commissionPercent = 8;
+  // Fallback matches the Starter plan's take-rate so the calculator never
+  // under-states the commission before the real plan loads.
+  let commissionPercent = 10;
+  // Services belong to a branch; with more than one we label each card so the
+  // list is unambiguous even in the "all branches" view.
+  const branchNames = new Map();
+  let showBranch = false;
 
   function updateNetCalc() {
     if (!netCalc) return;
@@ -39,13 +46,17 @@ import { uploadImage, publicUrl } from '../../../shared/js/uploads.js';
 
   async function loadLaundromats() {
     try {
-      const { data: laundromats } = await api.get('/owner?action=laundromats');
-      if (!laundromats.length) {
+      const branches = (await loadBranches()).filter((l) => l.business_status !== 'archived');
+      branchNames.clear();
+      branches.forEach((l) => branchNames.set(l.id, l.name));
+      showBranch = branches.length > 1;
+      if (!branches.length) {
         select.innerHTML = '<option value="">No laundromat yet</option>';
         return;
       }
-      select.innerHTML = laundromats
-        .map((l) => `<option value="${l.id}">${escapeHtml(l.name)} (${escapeHtml(l.verification_status)})</option>`)
+      const current = branchScope();
+      select.innerHTML = branches
+        .map((l) => `<option value="${l.id}"${l.id === current ? ' selected' : ''}>${escapeHtml(l.name)} (${escapeHtml(l.verification_status)})</option>`)
         .join('');
     } catch (err) {
       select.innerHTML = '<option value="">Failed to load</option>';
@@ -55,13 +66,14 @@ import { uploadImage, publicUrl } from '../../../shared/js/uploads.js';
   async function load() {
     skeleton(list, 3, 150);
     try {
-      const { data: services } = await api.get('/owner?action=services');
+      const { data: services } = await api.get(scoped('/owner?action=services'));
       if (!services.length) return emptyState(list, 'No services yet. Add your first one.');
       list.innerHTML = services.map((s) => `<article class="card">
         <div class="card-body">
           ${s.image_path ? `<img class="service-thumb" src="${publicUrl('laundromat-media', s.image_path)}" alt="">` : ''}
           ${badge(s.is_active ? 'active' : 'inactive', s.is_active ? 'success' : 'danger')}
           <h3 class="card-title">${escapeHtml(s.name)}</h3>
+          ${showBranch ? `<p class="text-xs text-muted">${escapeHtml(branchNames.get(s.laundromat_id) || 'Branch')}</p>` : ''}
           <p class="card-meta">${escapeHtml(s.description || '')}</p>
           <p class="text-sm">${currency(s.base_price)} · ${Number(s.turnaround_hours) || 24}h</p>
           <div class="flex">
@@ -70,7 +82,7 @@ import { uploadImage, publicUrl } from '../../../shared/js/uploads.js';
         </div>
       </article>`).join('');
     } catch (err) {
-      errorState(list, err.message || 'Failed to load services.');
+      errorState(list, err.message || 'Failed to load services.', { onRetry: load });
     }
   }
 
@@ -119,7 +131,7 @@ import { uploadImage, publicUrl } from '../../../shared/js/uploads.js';
       form.reset();
       serviceImagePath = null;
       if (imagePreview) { imagePreview.removeAttribute('src'); imagePreview.style.visibility = 'hidden'; }
-      loadLaundromats();
+      await loadLaundromats();
       load();
     } catch (err) {
       msg.textContent = err.message || 'Could not add service.';
@@ -144,7 +156,7 @@ import { uploadImage, publicUrl } from '../../../shared/js/uploads.js';
     }
   });
 
-  loadLaundromats();
   loadPlan();
+  await loadLaundromats();
   load();
 })();

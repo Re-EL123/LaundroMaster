@@ -2,6 +2,7 @@ import { api } from '../../../shared/js/api-client.js';
 import { skeleton, emptyState, errorState, badge, toast, confirmAction } from '../../../shared/js/ui.js';
 import { escapeHtml, currency, relativeTime, statusLabel, statusTone, param } from '../../../shared/js/format.js';
 import { mountDashboard } from '../../../shared/js/shell.js';
+import { scoped } from '../../../shared/js/branch.js';
 
 const NEXT_STATUS = {
   accepted: 'collected',
@@ -26,7 +27,7 @@ const ACTION_LABEL = {
 const SLA_MINUTES = 60;
 
 (async function () {
-  const user = await mountDashboard({ allowed: ['owner', 'staff', 'admin', 'super_admin'] });
+  const user = await mountDashboard({ allowed: ['owner', 'staff', 'admin', 'super_admin'], branchSwitcher: true });
   if (!user) return;
 
   const list = document.getElementById('list');
@@ -98,7 +99,7 @@ const SLA_MINUTES = 60;
     skeleton(list, 3, 160);
     try {
       const qs = filter.value ? `?status=${encodeURIComponent(filter.value)}` : '';
-      const { data: bookings } = await api.get('/bookings' + qs);
+      const { data: bookings } = await api.get(scoped('/bookings' + qs));
       const pending = bookings.filter((b) => b.status === 'pending_acceptance').length;
       if (slaNote) slaNote.textContent = pending ? `${pending} awaiting your acceptance` : '';
       acceptAllBtn.disabled = pending === 0;
@@ -106,7 +107,7 @@ const SLA_MINUTES = 60;
       const ordered = [...bookings].sort((a, b) => (b.status === 'pending_acceptance') - (a.status === 'pending_acceptance'));
       list.innerHTML = ordered.map(render).join('');
     } catch (err) {
-      errorState(list, err.message || 'Failed to load bookings.');
+      errorState(list, err.message || 'Failed to load bookings.', { onRetry: load });
     }
   }
 

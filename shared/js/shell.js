@@ -7,6 +7,7 @@ import { icon } from './icons.js';
 import { wirePrefetch } from './prefetch.js';
 import { observeEnhancements } from './ui.js';
 import { decorateAll, mountSidebarCollapse } from './nav.js';
+import { mountBranchSwitcher, applyScopeToNav, branchScope } from './branch.js';
 import './components.js';
 
 function mountNavToggle() {
@@ -59,7 +60,7 @@ function mountNavToggle() {
   return { setOpen };
 }
 
-export async function mountDashboard({ allowed, sidebarSelector = '.side-nav' } = {}) {
+export async function mountDashboard({ allowed, sidebarSelector = '.side-nav', branchSwitcher = false } = {}) {
   initTheme();
   const user = await guard(allowed || []);
   if (!user) return null;
@@ -81,9 +82,22 @@ export async function mountDashboard({ allowed, sidebarSelector = '.side-nav' } 
     }
   });
 
+  // Carry the branch scope through the sidebar so navigating never silently
+  // widens a filtered view back to all branches. Done after the active link is
+  // marked, so the plain-path comparison above still matches.
+  applyScopeToNav();
+
   const slot = document.getElementById('sessionMount');
   if (slot) mountSignOut(slot);
-  mountNotifications(document.getElementById('notifMount'));
+  mountNotifications(document.getElementById('notifMount'), { branchScoped: Boolean(branchScope()) });
+
+  // Multi-branch owners can scope the whole page to one branch. The picker
+  // shares a slot with the session controls so it sits in the topbar.
+  if (branchSwitcher) {
+    const cluster = slot?.parentElement;
+    const bar = (cluster && cluster.classList.contains('flex')) ? cluster : document.querySelector('.topbar .page-shell') || document.querySelector('.topbar');
+    mountBranchSwitcher(bar);
+  }
 
   const topbar = document.querySelector('.topbar .page-shell') || document.querySelector('.topbar');
   if (topbar && !topbar.querySelector('.install-app-btn')) {

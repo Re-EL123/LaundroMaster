@@ -295,7 +295,14 @@ export default createHandler(async function handler(req, res) {
     } else if (isOwner(ctx)) {
       const ids = await scopedLaundromatIds(supa, ctx.user.id);
       if (!ids.length) return res.status(200).json(successEnvelope([]));
-      request = request.in('laundromat_id', ids).neq('status', 'pending_payment');
+      // The owner app's branch switcher narrows the list to one branch.
+      if (q.laundromat_id) {
+        if (!ids.includes(q.laundromat_id)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Not your laundromat', 403)));
+        request = request.eq('laundromat_id', q.laundromat_id);
+      } else {
+        request = request.in('laundromat_id', ids);
+      }
+      request = request.neq('status', 'pending_payment');
     } else {
       request = request.eq('customer_id', ctx.user.id);
     }

@@ -4,6 +4,11 @@
 .theme-toggle { min-width: 2.5rem; font-size: 1rem; line-height: 1; }
 .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
 .toolbar { display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: flex-end; margin-bottom: var(--space-6); }
+/* Filter bars stay in view while the list scrolls. Desktop/tablet only: on a
+   phone a pinned bar would eat most of the viewport. */
+@media (min-width: 721px) {
+  .toolbar-sticky { position: sticky; top: 0; z-index: 20; padding-block: var(--space-3); background: var(--color-surface); }
+}
 .table-wrap { overflow-x: auto; }
 .table { width: 100%; border-collapse: collapse; background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
 .table th, .table td { text-align: left; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border); font-size: 0.9rem; white-space: nowrap; }
