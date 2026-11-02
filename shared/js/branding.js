@@ -2,12 +2,21 @@ import { uploadImage, publicUrl } from './uploads.js';
 import { escapeHtml } from './format.js';
 import { bestEffortPosition } from './geolocation.js';
 import { attachPlaceAutocomplete } from './places.js';
+import { emptyCTA } from './ui.js';
 
 // Renders per-laundromat branding controls (logo + gallery + details) into `host`.
 export function mountBranding(host, laundromats = []) {
   if (!host) return;
   if (!laundromats.length) {
-    host.innerHTML = '<p class="text-muted text-sm">No laundromat linked to your account yet.</p>';
+    // Landing here without a laundromat is the start of the setup journey,
+    // not a dead end — link straight into the wizard.
+    emptyCTA(host, {
+      title: 'No laundromat yet',
+      message: 'Set up your laundromat to add branding, services and delivery zones.',
+      href: 'setup.html',
+      label: 'Start setup',
+      icon: 'store',
+    });
     return;
   }
 

@@ -40,6 +40,23 @@ async function resolveRole(admin, userId) {
   return topRole(roles) || ROLE_PRIORITY[ROLE_PRIORITY.length - 1];
 }
 
+// An owner account must always have a laundromat to set up. Called from
+// provisionUser() and from the `me` endpoint, because a confirmed owner can
+// arrive straight from the emailed link — a path that never runs login-time
+// provisioning, so without this the setup journey would open on nothing.
+async function ensureOwnerLaundromat(admin, user, { fullName } = {}) {
+  if (!admin || !user || !user.id) return;
+  const { data: existing } = await admin.from('laundromats').select('id').eq('owner_id', user.id).limit(1);
+  if (existing && existing.length) return;
+  const name = fullName || user.user_metadata?.full_name || null;
+  await admin.from('laundromats').insert({
+    owner_id: user.id,
+    name: name ? `${name}'s Laundry` : 'My Laundry',
+    verification_status: 'pending',
+    business_status: 'pending',
+  });
+}
+
 // Provision a *confirmed* account. Called on registration only when Supabase
 // returns a session (email confirmation disabled) and on every successful
 // login, so unconfirmed sign-ups never receive roles or a laundromat.
@@ -68,15 +85,7 @@ async function provisionUser(admin, user, { accountType = 'customer', fullName, 
   );
 
   if (type === 'owner') {
-    const { data: existing } = await admin.from('laundromats').select('id').eq('owner_id', user.id).limit(1);
-    if (!existing || existing.length === 0) {
-      await admin.from('laundromats').insert({
-        owner_id: user.id,
-        name: name ? `${name}'s Laundry` : 'My Laundry',
-        verification_status: 'pending',
-        business_status: 'pending',
-      });
-    }
+    await ensureOwnerLaundromat(admin, user, { fullName: name });
   }
 
   const referralCode = ref || user.user_metadata?.ref;
@@ -350,6 +359,11 @@ export default createHandler(async function handler(req, res) {
     if (action === 'me') {
       const ctx = await getUser(req);
       if (!ctx.user) return res.status(401).json(errorEnvelope(new ApiError('UNAUTHORIZED', 'Invalid session', 401)));
+      // Owners must always have a laundromat to set up, including when they
+      // land here straight from the emailed confirmation link.
+      if ((ctx.roles || []).includes('owner') || ctx.role === 'owner') {
+        await ensureOwnerLaundromat(admin, ctx.user);
+      }
       const { data: profile } = await admin.from('profiles').select('*').eq('id', ctx.user.id).maybeSingle();
       return res.status(200).json(successEnvelope({
         user: {

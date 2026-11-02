@@ -16,6 +16,7 @@ const NAV_ICONS = {
   plan: 'layers', plans: 'layers', subscription: 'layers',
   promotions: 'tag', promotion: 'tag',
   ads: 'megaphone', ad: 'megaphone',
+  setup: 'sliders-horizontal', onboarding: 'sliders-horizontal', 'get started': 'sliders-horizontal',
   settings: 'settings', setting: 'settings',
   laundromats: 'store', laundromat: 'store', stores: 'store',
   verifications: 'badge-check', verification: 'badge-check',

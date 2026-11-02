@@ -1,6 +1,6 @@
 import { api } from '../../../shared/js/api-client.js';
 import { escapeHtml, currency, relativeTime, statusLabel, statusTone } from '../../../shared/js/format.js';
-import { badge, emptyState, statTile, animateCounts, initReveal, openModal } from '../../../shared/js/ui.js';
+import { badge, emptyState, emptyCTA, statTile, animateCounts, initReveal, openModal } from '../../../shared/js/ui.js';
 import { lineChart, hbarChart, initCharts } from '../../../shared/js/charts.js';
 import { swr, cacheClear, cacheSet } from '../../../shared/js/cache.js';
 import { openHoursEditor, openZonesEditor } from '../../../shared/js/operations.js';
@@ -74,8 +74,16 @@ const FIX_META = {
 
   function paintVerification(list) {
     if (!list.length) {
-      bannerEl.innerHTML = '<div class="banner banner-warning"><div><strong>Set up your business</strong><p class="text-sm">Add your laundromat details to start receiving bookings.</p></div></div>';
-      checklistEl.innerHTML = '<h2 class="card-title">Setup checklist</h2><p class="text-muted text-sm mt-4">No laundromat linked yet.</p>';
+      bannerEl.innerHTML = '';
+      // No laundromat yet — send the owner into the guided setup journey
+      // instead of leaving a dead-end message.
+      emptyCTA(checklistEl, {
+        title: 'Set up your business',
+        message: 'Add your laundromat details, services and delivery zones to start receiving bookings.',
+        href: 'pages/setup.html',
+        label: 'Start setup',
+        icon: 'store',
+      });
       return;
     }
     const primary = list[0];

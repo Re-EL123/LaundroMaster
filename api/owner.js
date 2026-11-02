@@ -34,6 +34,21 @@ export async function memberLaundromatIds(supa, ctx) {
   return [...new Set([...owned, ...memberIds])];
 }
 
+// A laundromat is ready for its first service once its public profile,
+// branding and serviceability details exist. It deliberately excludes services
+// themselves — this gate *guards* the creation of the very first one.
+async function isLaundromatSetupComplete(supa, laundromatId) {
+  const [{ data: l }, { data: hours }, { data: zones }] = await Promise.all([
+    supa.from('laundromats').select('name, address, phone, description, logo_path').eq('id', laundromatId).single(),
+    supa.from('operating_hours').select('id').eq('laundromat_id', laundromatId).limit(1),
+    supa.from('delivery_zones').select('id').eq('laundromat_id', laundromatId).limit(1),
+  ]);
+  if (!l) return false;
+  return Boolean(l.name && l.address && l.phone && l.description && l.logo_path)
+    && Boolean(hours && hours.length)
+    && Boolean(zones && zones.length);
+}
+
 async function ownerBalance(supa, ownerId) {
   const { data: comms } = await supa.from('commissions').select('net_amount, status').eq('owner_id', ownerId);
   const earned = round2((comms || []).filter((c) => c.status !== 'reversed').reduce((s, c) => s + num(c.net_amount, 0), 0));
@@ -49,26 +64,6 @@ export default createHandler(async function handler(req, res) {
   if (!supa) return res.status(503).json(errorEnvelope(new ApiError('NOT_CONFIGURED', 'Supabase not configured', 503)));
 
   const ctx = await requireRoles(req, ['owner', 'staff', 'admin', 'super_admin']);
-
-
-async function isLaundromatSetupComplete(supa, laundromatId) {
-  const [{ data: l }, { data: svcs }, { data: hours }, { data: zones }] = await Promise.all([
-    supa.from('laundromats').select('name, address, phone, description, logo_path').eq('id', laundromatId).single(),
-    supa.from('services').select('id').eq('laundromat_id', laundromatId).eq('is_active', true).limit(1),
-    supa.from('operating_hours').select('id').eq('laundromat_id', laundromatId).limit(1),
-    supa.from('delivery_zones').select('id').eq('laundromat_id', laundromatId).limit(1),
-  ]);
-  if (!l) return false;
-  const checks = [
-    l.name && l.address && l.phone,
-    !!l.description,
-    !!l.logo_path,
-    (svcs && svcs.length > 0),
-    (hours && hours.length > 0),
-    (zones && zones.length > 0),
-  ];
-  return checks.every(Boolean);
-}
 
   const ids = await memberLaundromatIds(supa, ctx);
   const ownedIds = await ownerLaundromatIds(supa, ctx);
