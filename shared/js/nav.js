@@ -20,6 +20,7 @@ const NAV_ICONS = {
   laundromats: 'store', laundromat: 'store', stores: 'store',
   verifications: 'badge-check', verification: 'badge-check',
   users: 'users', user: 'user', customers: 'users',
+  reviews: 'star', review: 'star', ratings: 'star', rating: 'star',
   commissions: 'percent', commission: 'percent',
   payments: 'credit-card', payment: 'credit-card',
   refunds: 'rotate-ccw', refund: 'rotate-ccw',
