@@ -46,17 +46,24 @@ import { beginPayfastCheckout } from '../../../shared/js/payfast-checkout.js';
         api.get('/owner?action=laundromats'),
       ]);
       const priceNote = document.getElementById('priceNote');
-      if (priceNote) priceNote.textContent = `${currency(promo.price)} for ${promo.days} days of featured placement at the top of search.`;
+      const credits = promo.credits || { total: 0, used: 0, remaining: 0 };
+      if (priceNote) {
+        priceNote.textContent = credits.remaining > 0
+          ? `You have ${credits.remaining} free promoted listing${credits.remaining === 1 ? '' : 's'} included in your plan this period — otherwise ${currency(promo.price)} for ${promo.days} days.`
+          : `${currency(promo.price)} for ${promo.days} days of featured placement at the top of search.`;
+      }
       select.innerHTML = (laundromats || []).map((l) => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
       const s = promo.summary || {};
       const summaryEl = document.getElementById('promoStats');
       if (summaryEl) {
-        summaryEl.innerHTML = [
+        const tiles = [
           { label: 'Active', value: s.active, tone: s.active ? 'success' : '' },
           { label: 'Impressions', value: s.impressions },
           { label: 'Clicks', value: s.clicks },
           { label: 'Total spend', value: currency(s.spend) },
-        ].map(statTile).join('');
+        ];
+        if (credits.total > 0) tiles.splice(1, 0, { label: 'Free credits left', value: `${credits.remaining}/${credits.total}`, tone: credits.remaining > 0 ? 'success' : '' });
+        summaryEl.innerHTML = tiles.map(statTile).join('');
       }
       if (!promo.promotions.length) return emptyState(list, 'No promotions yet. Feature a laundromat above to stand out in search.');
       list.innerHTML = promo.promotions.map(render).join('');
@@ -77,7 +84,7 @@ import { beginPayfastCheckout } from '../../../shared/js/payfast-checkout.js';
         return;
       }
       if (data && data.paid) {
-        toast('Promotion activated', 'success');
+        toast(data.plan_credit ? 'Free promoted listing activated from your plan' : 'Promotion activated', 'success');
         load();
         return;
       }

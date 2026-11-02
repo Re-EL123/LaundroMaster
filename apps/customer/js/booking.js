@@ -96,6 +96,9 @@ function renderSummary() {
     value: currency(delivery),
   });
   if (quote && quote.has_plan) lines.push({ label: 'Plus savings', value: 'Free delivery', sub: true });
+  if (quote && Number(quote.member_discount) > 0) {
+    lines.push({ label: 'LaundroMaster+ member discount', value: `-${currency(quote.member_discount)}` });
+  }
 
   orderSummaryEl.innerHTML = moneyBreakdown(lines, { total: currency(total) });
 
@@ -109,7 +112,7 @@ function renderSummary() {
     plusUpsellEl.innerHTML = `<div class="callout callout-primary">
       <div>
         <strong class="text-sm">Save ${currency(delivery)} with LaundroMaster+</strong>
-        <p class="text-xs text-muted">Members get free collection &amp; delivery on every order.</p>
+        <p class="text-xs text-muted">Members get free collection &amp; delivery plus a members-only discount on every order.</p>
         <a class="btn btn-primary text-sm mt-4" href="profile.html">Join from profile</a>
       </div>
     </div>`;

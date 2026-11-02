@@ -23,6 +23,8 @@ const STEPS = [
 const state = {
   step: 0,
   laundromat: null,
+  branches: [],
+  branchLimit: 1,
   verification: null,
   services: [],
   hours: [],
@@ -32,6 +34,7 @@ const state = {
 };
 
 const wizardEl = document.getElementById('wizard');
+const branchBarEl = document.getElementById('branchBar');
 const loadingEl = document.getElementById('loading');
 const stepsEl = document.getElementById('steps');
 const stepTitleEl = document.getElementById('stepTitle');
@@ -94,12 +97,20 @@ async function refreshData() {
     api.get('/owner?action=plan').catch(() => ({ data: null })),
   ]);
 
-  state.laundromat = (laundromats || [])[0] || null;
+  state.branches = laundromats || [];
+  const requestedBranch = new URLSearchParams(location.search).get('laundromat');
+  state.laundromat = state.branches.find((b) => b.id === requestedBranch) || state.branches[0] || null;
+
+  const planData = planRes.data || null;
+  const activePlan = planData ? (planData.subscription ? planData.subscription.plans : planData.plan) : null;
+  // The plan's branch allowance is the limit the server enforces on create.
+  state.branchLimit = Math.max(1, Number(activePlan && activePlan.includes_branches) || 1);
+
   const verification = Array.isArray(verifyRes.data) ? verifyRes.data : null;
   state.verification = verification && verification.length
     ? (verification.find((v) => v.id === state.laundromat?.id) || verification[0])
     : null;
-  state.plan = planRes.data || null;
+  state.plan = planData;
 
   const lid = state.laundromat && state.laundromat.id;
   if (!lid) { state.services = []; state.hours = []; state.zones = []; return; }
@@ -138,8 +149,67 @@ function renderStepper() {
   }).join('');
 }
 
+// Shows which branch is being set up and how many the current plan allows, so
+// the setup journey is visibly tied to the subscription.
+function renderBranchBar() {
+  if (!branchBarEl || !state.laundromat) return;
+  const planData = state.plan || {};
+  const activePlan = planData.subscription ? planData.subscription.plans : planData.plan;
+  const planName = activePlan ? activePlan.name : 'Free';
+  const used = state.branches.length;
+  const limit = state.branchLimit;
+  const atLimit = used >= limit;
+  const branchPicker = state.branches.length > 1
+    ? `<select class="input" id="branchSelect" aria-label="Choose a branch">${state.branches
+        .map((b) => `<option value="${b.id}"${b.id === state.laundromat.id ? ' selected' : ''}>${escapeHtml(b.name)}</option>`)
+        .join('')}</select>`
+    : `<strong class="text-sm">${escapeHtml(state.laundromat.name || 'My Laundry')}</strong>`;
+
+  branchBarEl.innerHTML = `<section class="card"><div class="card-body">
+    <div class="flex justify-between wrap items-center" style="gap:var(--space-3)">
+      <div class="grow">
+        <p class="text-xs text-muted">Setting up</p>
+        ${branchPicker}
+      </div>
+      <div>
+        <p class="text-xs text-muted">${used} of ${limit} branch${limit === 1 ? '' : 'es'} on ${escapeHtml(planName)}</p>
+        ${atLimit
+          ? '<a class="btn btn-secondary btn-sm" href="plan.html">Upgrade for more branches</a>'
+          : '<button type="button" class="btn btn-secondary btn-sm" data-add-branch>Add branch</button>'}
+      </div>
+    </div>
+  </div></section>`;
+
+  const select = branchBarEl.querySelector('#branchSelect');
+  if (select) {
+    select.addEventListener('change', () => {
+      const url = new URL(location.href);
+      url.searchParams.set('laundromat', select.value);
+      location.href = url.toString();
+    });
+  }
+  const addBtn = branchBarEl.querySelector('[data-add-branch]');
+  if (addBtn) addBtn.addEventListener('click', addBranch);
+}
+
+async function addBranch() {
+  const btn = branchBarEl.querySelector('[data-add-branch]');
+  if (btn) btn.disabled = true;
+  try {
+    const { data } = await api.post('/owner?action=laundromat-create', {});
+    toast('Branch added — let’s set it up', 'success');
+    const url = new URL(location.href);
+    url.searchParams.set('laundromat', data.laundromat.id);
+    location.href = url.toString();
+  } catch (err) {
+    toast(err.message || 'Could not add a branch', 'danger');
+    if (btn) btn.disabled = false;
+  }
+}
+
 function render() {
   const step = STEPS[state.step];
+  renderBranchBar();
   renderStepper();
   stepTitleEl.textContent = step.title;
   const doneCount = STEPS.filter((s) => stepDone(s.id)).length;

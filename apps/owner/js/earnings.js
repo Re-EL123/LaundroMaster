@@ -20,6 +20,7 @@ const TXN_LABELS = {
   const paidOutEl = document.getElementById('paidOut');
   const txnsEl = document.getElementById('txns');
   const chartEl = document.getElementById('chart');
+  const byBranchEl = document.getElementById('byBranch');
 
   skeleton(txnsEl, 3, 90);
   try {
@@ -27,6 +28,18 @@ const TXN_LABELS = {
     totalEl.textContent = currency(data.total);
     if (availableEl) availableEl.textContent = currency(data.available);
     if (paidOutEl) paidOutEl.textContent = currency(data.paidOut);
+
+    // Consolidated reporting only matters once there is more than one branch.
+    const branches = data.by_branch || [];
+    if (byBranchEl && branches.length > 1) {
+      byBranchEl.innerHTML = `<div class="section-head"><h2>By branch</h2><span class="text-sm text-muted">Consolidated</span></div>
+        <div class="card" style="margin-bottom:var(--space-6)"><div class="card-body">
+          <ul class="plain-list">${branches.map((b) => `<li class="flex justify-between items-center">
+            <span>${escapeHtml(b.name)}</span><strong>${currency(b.total)}</strong>
+          </li>`).join('')}</ul>
+        </div></div>`;
+    }
+
     const txns = data.transactions || [];
     if (!txns.length) return emptyState(txnsEl, 'No transactions yet.');
     txnsEl.innerHTML = txns.map((t) => `<article class="card" style="margin-bottom:var(--space-3)">

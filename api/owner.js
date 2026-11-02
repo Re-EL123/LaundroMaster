@@ -8,7 +8,7 @@ import {
   staffInvite, staffUpdate, staffRemove, capacityUpdate, hoursUpdate, zonesUpdate, documentUpload,
 } from './_lib/validation.js';
 import { getSettings, num } from './_lib/settings.js';
-import { round2, activeSubscription, defaultPlan } from './_lib/pricing.js';
+import { round2, activeSubscription, defaultPlan, effectiveOwnerPlan } from './_lib/pricing.js';
 import { reconcilePromotions } from './_lib/promotions.js';
 import { notifyUsers, notifyUser } from './_lib/push.js';
 import { geocode, validLatLng } from './_lib/geo.js';
@@ -228,12 +228,23 @@ export default createHandler(async function handler(req, res) {
     if (action === 'earnings') {
       if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can view earnings', 403)));
       const balance = await ownerBalance(supa, ctx.user.id);
-      if (!ids.length) return res.status(200).json(successEnvelope({ total: 0, ...balance, transactions: [] }));
+      if (!ids.length) return res.status(200).json(successEnvelope({ total: 0, by_branch: [], ...balance, transactions: [] }));
       const { data, error } = await supa.from('transactions').select('*').in('laundromat_id', ids).order('created_at', { ascending: false }).limit(100);
       if (error) return res.status(500).json(errorEnvelope(error));
       const txns = (data || []).filter((t) => !String(t.type || '').startsWith('platform_') && !String(t.type || '').startsWith('subscription:'));
       const total = round2(txns.reduce((sum, t) => sum + (Number(t.amount) || 0), 0));
-      return res.status(200).json(successEnvelope({ total, ...balance, transactions: txns }));
+      // Consolidated reporting: one line per branch, so a multi-branch owner
+      // (Pro/Chain) can see where the money came from without switching views.
+      const { data: branchRows } = await supa.from('laundromats').select('id, name').in('id', ids);
+      const nameById = new Map((branchRows || []).map((b) => [b.id, b.name]));
+      const sums = new Map();
+      for (const t of txns) {
+        sums.set(t.laundromat_id, round2((sums.get(t.laundromat_id) || 0) + (Number(t.amount) || 0)));
+      }
+      const by_branch = [...sums.entries()]
+        .map(([id, amount]) => ({ laundromat_id: id, name: nameById.get(id) || 'Branch', total: amount }))
+        .sort((a, b) => b.total - a.total);
+      return res.status(200).json(successEnvelope({ total, by_branch, ...balance, transactions: txns }));
     }
 
     if (action === 'laundromats') {
@@ -272,9 +283,27 @@ export default createHandler(async function handler(req, res) {
         clicks: rows.reduce((s, p) => s + (Number(p.clicks) || 0), 0),
         spend: round2(rows.reduce((s, p) => s + (Number(p.amount_paid) || 0), 0)),
       };
+      // Promoted-listing credits are part of the Pro/Chain plans, so surface
+      // the allowance here rather than only in the plan chooser.
+      const plan = await effectiveOwnerPlan(supa, ctx.user.id);
+      const creditTotal = Math.max(0, num(plan && plan.promotion_credits, 0));
+      let usedCredits = 0;
+      if (creditTotal > 0) {
+        const sub = await activeSubscription(supa, ctx.user.id, 'owner');
+        const periodStart = sub && sub.current_period_start ? sub.current_period_start : null;
+        let usedQuery = supa.from('promotions')
+          .select('id', { count: 'exact', head: true })
+          .eq('owner_id', ctx.user.id)
+          .eq('funded_by', 'plan');
+        if (periodStart) usedQuery = usedQuery.gte('created_at', periodStart);
+        const { count } = await usedQuery;
+        usedCredits = count || 0;
+      }
+      const credits = { total: creditTotal, used: usedCredits, remaining: Math.max(0, creditTotal - usedCredits) };
       return res.status(200).json(successEnvelope({
         promotions: rows,
         summary,
+        credits,
         price: num(settings.promotion_price, 199),
         days: num(settings.promotion_days, 30),
       }));
@@ -325,6 +354,34 @@ export default createHandler(async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
+    if (action === 'laundromat-create') {
+      if (!isOwnerRole(ctx)) return res.status(403).json(errorEnvelope(new ApiError('FORBIDDEN', 'Only owners can add branches', 403)));
+      // The plan's branch allowance is the real limit — Starter 1, Pro 3, Chain 10.
+      const plan = await effectiveOwnerPlan(supa, ctx.user.id);
+      const limit = Math.max(1, num(plan && plan.includes_branches, 1));
+      const { data: existing } = await supa.from('laundromats').select('id').eq('owner_id', ctx.user.id);
+      const count = (existing || []).length;
+      if (count >= limit) {
+        const planName = plan ? plan.name : 'current';
+        return res.status(403).json(errorEnvelope(new ApiError(
+          'PLAN_LIMIT_REACHED',
+          `Your ${planName} plan includes ${limit} branch${limit === 1 ? '' : 'es'}. Upgrade your plan to add more.`,
+          403,
+        )));
+      }
+      const metaName = ctx.user && ctx.user.user_metadata ? ctx.user.user_metadata.full_name : null;
+      const name = String((body(req) || {}).name || '').trim()
+        || (metaName ? `${metaName}'s Laundry` : 'My Laundry');
+      const { data, error } = await supa.from('laundromats').insert({
+        owner_id: ctx.user.id,
+        name: name.slice(0, 120),
+        verification_status: 'pending',
+        business_status: 'pending',
+      }).select('*').single();
+      if (error) return res.status(400).json(errorEnvelope(error));
+      return res.status(201).json(successEnvelope({ laundromat: data, branches: count + 1, limit }));
+    }
+
     if (action === 'laundromat-update') {
       const parsed = ownerLaundromatUpdate.safeParse(body(req));
       if (!parsed.success) return res.status(400).json(errorEnvelope(new ApiError('VALIDATION_ERROR', parsed.error.message)));
@@ -415,6 +472,48 @@ export default createHandler(async function handler(req, res) {
       }
       const days = parsed.data.days || num(settings.promotion_days, 30);
       const price = num(settings.promotion_price, 199);
+      // Pro and Chain include free promoted listings each billing period. Spend
+      // a plan credit before asking the owner for money.
+      const plan = await effectiveOwnerPlan(supa, ctx.user.id);
+      const creditTotal = Math.max(0, num(plan && plan.promotion_credits, 0));
+      if (price > 0 && creditTotal > 0) {
+        const sub = await activeSubscription(supa, ctx.user.id, 'owner');
+        const periodStart = sub && sub.current_period_start ? sub.current_period_start : null;
+        let usedQuery = supa.from('promotions')
+          .select('id', { count: 'exact', head: true })
+          .eq('owner_id', ctx.user.id)
+          .eq('funded_by', 'plan');
+        if (periodStart) usedQuery = usedQuery.gte('created_at', periodStart);
+        const { count: used } = await usedQuery;
+        if ((used || 0) < creditTotal) {
+          const creditEnds = new Date();
+          creditEnds.setDate(creditEnds.getDate() + days);
+          const { data: creditPromo, error: creditErr } = await supa.from('promotions').insert({
+            laundromat_id,
+            owner_id: ctx.user.id,
+            kind,
+            amount_paid: 0,
+            funded_by: 'plan',
+            starts_at: new Date().toISOString(),
+            ends_at: creditEnds.toISOString(),
+            status: 'active',
+          }).select().single();
+          if (creditErr) return res.status(400).json(errorEnvelope(creditErr));
+          if (kind === 'featured') {
+            await supa.from('laundromats').update({ is_featured: true, featured_until: creditEnds.toISOString() }).eq('id', laundromat_id);
+          }
+          await supa.from('transactions').insert({ laundromat_id, type: 'promotion', amount: 0, currency: settings.currency || 'ZAR' });
+          const remaining = Math.max(0, creditTotal - (used || 0) - 1);
+          return res.status(201).json(successEnvelope({
+            promotion: creditPromo,
+            paid: true,
+            plan_credit: true,
+            credits_remaining: remaining,
+            checkout_url: null,
+            amount: 0,
+          }));
+        }
+      }
       if (price <= 0) {
         const ends = new Date();
         ends.setDate(ends.getDate() + days);

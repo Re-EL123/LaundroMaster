@@ -134,6 +134,7 @@ export const planUpsert = z.object({
   price_monthly: z.number().nonnegative(),
   commission_percent: z.number().min(0).max(100),
   includes_branches: z.number().int().nonnegative().optional().default(1),
+  promotion_credits: z.number().int().nonnegative().optional().default(0),
   features: z.array(z.string().max(120)).optional().default([]),
   is_active: z.boolean().optional().default(true),
   sort: z.number().int().optional().default(0),

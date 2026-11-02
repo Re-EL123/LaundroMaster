@@ -10,6 +10,7 @@ export const DEFAULT_SETTINGS = {
   promotion_price: 199,
   promotion_days: 30,
   customer_plus_free_delivery: true,
+  customer_plus_discount_percent: 5,
   feature_owner_subscriptions: true,
   feature_customer_plans: true,
   feature_promotions: true,

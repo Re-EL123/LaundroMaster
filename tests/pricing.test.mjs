@@ -36,3 +36,12 @@ test('computeCharges applies tax and discount to the total', () => {
   assert.equal(c.commission, 10);
   assert.equal(c.ownerNet, 90);
 });
+
+test('computeCharges subtracts the member discount without touching owner net', () => {
+  const c = computeCharges({ subtotal: 200, deliveryFee: 0, memberDiscount: 10, commissionPercent: 10 });
+  assert.equal(c.total, 190);
+  assert.equal(c.commission, 20);
+  // The platform absorbs the members-only discount out of its own margin.
+  assert.equal(c.ownerNet, 180);
+  assert.equal(c.memberDiscount, 10);
+});

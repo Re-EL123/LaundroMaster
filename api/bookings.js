@@ -6,7 +6,7 @@ import { requireUser, requireRoles, isAdmin, isOwner } from './_lib/auth.js';
 import { bookingCreate, bookingUpdateStatus, bookingAssignStaff, bookingMessage, bookingNote, redeemPoints } from './_lib/validation.js';
 import {
   ownerCommissionPercent, isCustomerSubscriber, computeDeliveryBreakdown,
-  computeCharges, recordCompletionLedger, reverseCompletionLedger,
+  computeCharges, customerMemberDiscountPercent, recordCompletionLedger, reverseCompletionLedger, round2,
 } from './_lib/pricing.js';
 import { notifyUser } from './_lib/push.js';
 import { assertFeature } from './_lib/guard.js';
@@ -183,6 +183,11 @@ export default createHandler(async function handler(req, res) {
     const commissionPercent = await ownerCommissionPercent(supa, biz.owner_id, settings);
     const tax = 0;
     const discount = 0;
+    // LaundroMaster+ members get a platform-funded discount on the service
+    // subtotal. It is the "members-only offer" the customer plan advertises.
+    const memberDiscount = customerPlan
+      ? round2(subtotal * (customerMemberDiscountPercent(settings) / 100))
+      : 0;
     const charges = computeCharges({
       subtotal,
       deliveryFee: delivery.total,
@@ -190,6 +195,7 @@ export default createHandler(async function handler(req, res) {
       ownerDeliveryFee: delivery.owner,
       tax,
       discount,
+      memberDiscount,
       commissionPercent,
     });
     return {
@@ -201,6 +207,7 @@ export default createHandler(async function handler(req, res) {
       commission: charges.commission,
       tax,
       discount,
+      member_discount: charges.memberDiscount,
       total: charges.total,
       currency: settings.currency || 'ZAR',
       zone: zoneInfo.zone ? { id: zoneInfo.zone.id, name: zoneInfo.zone.name, fee: zoneInfo.fee } : null,
@@ -386,6 +393,7 @@ export default createHandler(async function handler(req, res) {
           delivery_fee: quote.delivery_fee,
           tax_amount: quote.tax,
           discount_amount: quote.discount,
+          member_discount_amount: quote.member_discount || 0,
           total_amount: quote.total,
           commission_amount: quote.commission,
           platform_fee: quote.platform_fee,

@@ -23,6 +23,7 @@ import { mountDashboard } from '../../../shared/js/shell.js';
         <div class="field"><label class="label">Monthly price</label><input class="input" type="number" step="0.01" name="price_monthly" value="${p.price_monthly}"></div>
         <div class="field"><label class="label">Commission %</label><input class="input" type="number" step="0.1" name="commission_percent" value="${p.commission_percent}"></div>
         <div class="field"><label class="label">Includes branches</label><input class="input" type="number" name="includes_branches" value="${p.includes_branches}"></div>
+        <div class="field"><label class="label">Free promoted listings / month</label><input class="input" type="number" name="promotion_credits" value="${p.promotion_credits || 0}"></div>
         <div class="field"><label class="label">Features (one per line)</label><textarea class="input" name="features" rows="3">${escapeHtml(features)}</textarea></div>
         <div class="flex">
           <button class="btn btn-primary" type="submit">Save</button>
@@ -59,6 +60,7 @@ import { mountDashboard } from '../../../shared/js/shell.js';
         price_monthly: Number(fd.get('price_monthly')),
         commission_percent: Number(fd.get('commission_percent')),
         includes_branches: Number(fd.get('includes_branches')),
+        promotion_credits: Number(fd.get('promotion_credits') || 0),
         features: fd.get('features').split('\n').map((s) => s.trim()).filter(Boolean),
       });
       toast('Plan saved', 'success');
@@ -95,6 +97,7 @@ import { mountDashboard } from '../../../shared/js/shell.js';
         audience: document.getElementById('n_audience').value,
         price_monthly: Number(document.getElementById('n_price').value || 0),
         commission_percent: Number(document.getElementById('n_commission').value || 0),
+        promotion_credits: Number(document.getElementById('n_credits').value || 0),
         features: document.getElementById('n_features').value.split('\n').map((s) => s.trim()).filter(Boolean),
       });
       toast('Plan created', 'success');

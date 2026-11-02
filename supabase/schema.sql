@@ -103,6 +103,7 @@ create table if not exists bookings (
   delivery_fee numeric not null default 0 check (delivery_fee >= 0),
   tax_amount numeric not null default 0 check (tax_amount >= 0),
   discount_amount numeric not null default 0 check (discount_amount >= 0),
+  member_discount_amount numeric not null default 0 check (member_discount_amount >= 0),
   total_amount numeric not null default 0 check (total_amount >= 0),
   pickup_required boolean not null default false,
   delivery_required boolean not null default false,
@@ -397,6 +398,7 @@ create table if not exists plans (
   currency text not null default 'ZAR',
   commission_percent numeric not null default 8,
   includes_branches integer not null default 1,
+  promotion_credits integer not null default 0,
   features jsonb not null default '[]'::jsonb,
   is_active boolean not null default true,
   sort integer not null default 0,
@@ -433,6 +435,8 @@ create table if not exists promotions (
   owner_id uuid not null references profiles(id) on delete cascade,
   kind text not null default 'featured' check (kind in ('featured', 'discount')),
   amount_paid numeric not null default 0,
+  -- Who paid for the promotion: the owner, or a plan-provided credit.
+  funded_by text not null default 'owner' check (funded_by in ('owner', 'plan')),
   currency text not null default 'ZAR',
   starts_at timestamptz not null default now(),
   ends_at timestamptz not null,
@@ -495,15 +499,15 @@ alter table laundromats add column if not exists featured_until timestamptz;
 -- ---------------------------------------------------------------------------
 -- Default plans
 -- ---------------------------------------------------------------------------
-insert into plans (code, name, audience, description, price_monthly, commission_percent, includes_branches, features, sort) values
-  ('owner_free',  'Starter', 'owner', 'Get discovered and start taking bookings.', 0,   10, 1,
-    '["Public profile","Booking inbox","Basic earnings","Payout requests"]'::jsonb, 1),
-  ('owner_pro',   'Pro',     'owner', 'Lower take-rate and tools to grow.',        299,  4, 3,
-    '["Everything in Starter","Lower 4% take-rate","3 branches","Promoted listing credit","Priority support"]'::jsonb, 2),
-  ('owner_chain', 'Chain',   'owner', 'Run multiple laundromats at scale.',        799,  2, 10,
-    '["Everything in Pro","2% take-rate","10 branches","Consolidated reporting","API access","Dedicated manager"]'::jsonb, 3),
-  ('customer_plus','LaundroMaster+', 'customer', 'Free pickup & delivery on every order.', 99, 0, 0,
-    '["Free pickup & delivery","Priority support","Members-only offers"]'::jsonb, 1)
+insert into plans (code, name, audience, description, price_monthly, commission_percent, includes_branches, promotion_credits, features, sort) values
+  ('owner_free',  'Starter', 'owner', 'Get discovered and start taking bookings.', 0,   10, 1, 0,
+    '["Public profile","Booking inbox","Earnings & payouts","1 branch"]'::jsonb, 1),
+  ('owner_pro',   'Pro',     'owner', 'Lower take-rate and tools to grow.',        299,  4, 3, 1,
+    '["Everything in Starter","Lower 4% take-rate","Up to 3 branches","1 free promoted listing each month"]'::jsonb, 2),
+  ('owner_chain', 'Chain',   'owner', 'Run multiple laundromats at scale.',        799,  2, 10, 3,
+    '["Everything in Pro","2% take-rate","Up to 10 branches","Consolidated multi-branch reporting","3 free promoted listings each month"]'::jsonb, 3),
+  ('customer_plus','LaundroMaster+', 'customer', 'Free pickup & delivery on every order.', 99, 0, 0, 0,
+    '["Free pickup & delivery on every order","Members-only 5% discount on every order"]'::jsonb, 1)
 on conflict (code) do nothing;
 
 -- ---------------------------------------------------------------------------
@@ -520,6 +524,7 @@ insert into platform_settings (key, value) values
   ('market',                    '"ZA"'::jsonb),
   ('platform_name',             '"LaundroMaster"'::jsonb),
   ('customer_plus_free_delivery','true'::jsonb),
+  ('customer_plus_discount_percent','5'::jsonb),
   ('feature_owner_subscriptions','true'::jsonb),
   ('feature_customer_plans',    'true'::jsonb),
   ('feature_promotions',        'true'::jsonb),

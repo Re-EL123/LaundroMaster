@@ -74,11 +74,27 @@ export async function defaultPlan(supa, audience) {
   }
 }
 
+// The plan an owner is actually on: their subscription, or the free (default)
+// plan when they have none. This is the single source of truth for every
+// entitlement — rate, branch limit and promotion credits — so the Plans page
+// and the charged amounts can never disagree.
+export async function effectiveOwnerPlan(supa, ownerId) {
+  const sub = ownerId ? await activeSubscription(supa, ownerId, 'owner') : null;
+  if (sub && sub.plans) return sub.plans;
+  return defaultPlan(supa, 'owner');
+}
+
 export async function ownerCommissionPercent(supa, ownerId, settings) {
   const s = settings || await getSettings(supa);
-  const sub = ownerId ? await activeSubscription(supa, ownerId, 'owner') : null;
-  const planPercent = sub && sub.plans ? sub.plans.commission_percent : null;
+  const plan = await effectiveOwnerPlan(supa, ownerId);
+  const planPercent = plan ? plan.commission_percent : null;
   return num(planPercent, num(s.commission_percent, 8));
+}
+
+// Platform-funded discount for LaundroMaster+ members, as a percentage of the
+// service subtotal.
+export function customerMemberDiscountPercent(settings) {
+  return num(settings && settings.customer_plus_discount_percent, 0);
 }
 
 export async function isCustomerSubscriber(supa, userId) {
@@ -123,15 +139,18 @@ export function computeCharges({
   ownerDeliveryFee = 0,
   tax = 0,
   discount = 0,
+  memberDiscount = 0,
   commissionPercent = 0,
 }) {
   const sub = round2(subtotal);
-  const total = round2(sub + deliveryFee + tax - discount);
+  const member = round2(memberDiscount);
+  const total = round2(Math.max(0, sub + deliveryFee + tax - discount - member));
   const commission = round2(sub * (num(commissionPercent, 0) / 100));
   const platformFee = round2(platformDeliveryFee != null ? platformDeliveryFee : deliveryFee);
-  // Owners keep their own delivery surcharge; the platform keeps the base fee.
+  // Owners keep their own delivery surcharge and are unaffected by the member
+  // discount — the platform absorbs it out of its own margin.
   const ownerNet = round2(sub - commission + num(ownerDeliveryFee, 0));
-  return { subtotal: sub, total, commission, platformFee, ownerNet };
+  return { subtotal: sub, total, commission, platformFee, ownerNet, memberDiscount: member };
 }
 
 // Idempotent: record the commission ledger + earnings transactions when a

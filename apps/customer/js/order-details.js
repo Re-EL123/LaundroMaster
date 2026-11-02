@@ -24,6 +24,7 @@ function printReceipt(b) {
       <tr><td>Subtotal</td><td style="text-align:right">${currency(b.subtotal_amount)}</td></tr>
       <tr><td>Collection &amp; delivery</td><td style="text-align:right">${currency(b.delivery_fee)}</td></tr>
       ${Number(b.discount_amount) > 0 ? `<tr><td>Store credit</td><td style="text-align:right">-${currency(b.discount_amount)}</td></tr>` : ''}
+      ${Number(b.member_discount_amount) > 0 ? `<tr><td>LaundroMaster+ member discount</td><td style="text-align:right">-${currency(b.member_discount_amount)}</td></tr>` : ''}
       <tr class="total"><td>Total</td><td style="text-align:right">${currency(b.total_amount)}</td></tr>
       <tr><td>Payment</td><td style="text-align:right">${escapeHtml(b.payment ? statusLabel(b.payment.status) : 'Unpaid')}</td></tr>
     </table>
@@ -128,6 +129,7 @@ function renderBooking(b) {
           { label: 'Subtotal', value: currency(b.subtotal_amount) },
           { label: 'Collection & delivery', value: currency(b.delivery_fee) },
           ...(Number(b.discount_amount) > 0 ? [{ label: 'Store credit', value: `-${currency(b.discount_amount)}` }] : []),
+          ...(Number(b.member_discount_amount) > 0 ? [{ label: 'LaundroMaster+ member discount', value: `-${currency(b.member_discount_amount)}` }] : []),
         ], { total: currency(b.total_amount) })}
 
         ${b.scheduled_at ? `<p class="text-sm text-muted">Scheduled: ${formatDate(b.scheduled_at)}</p>` : ''}
